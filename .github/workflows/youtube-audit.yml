@@ -1,1 +1,38 @@
+name: YouTube Channel Audit
 
+on:
+  workflow_dispatch:
+    inputs:
+      channel_url:
+        description: 'YouTube Channel URL'
+        required: true
+        type: string
+  repository_dispatch:
+    types: [analyze-channel]
+
+jobs:
+  analyze-channel:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-js-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm install
+    
+    - name: Run YouTube Analysis
+      env:
+        YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+        GOOGLE_SHEETS_PRIVATE_KEY: ${{ secrets.GOOGLE_SHEETS_PRIVATE_KEY }}
+        GOOGLE_SHEETS_CLIENT_EMAIL: ${{ secrets.GOOGLE_SHEETS_CLIENT_EMAIL }}
+        GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+      run: |
+        echo "Starting YouTube channel analysis..."
+        node src/analyze.js "${{ github.event.inputs.channel_url || github.event.client_payload.channel_url }}"
