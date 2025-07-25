@@ -124,17 +124,674 @@ class YouTubeChannelAnalyzer {
       maxResults: 10
     });
 
+    // Fetch transcripts for recent videos (limit to 10 for performance)
+    console.log('📝 Analyzing video transcripts...');
+    const transcriptData = await this.fetchTranscriptsForVideos(videoStats.slice(0, 10));
+
     return {
       channel: channelResponse.data.items[0],
       videos: videoStats,
-      playlists: playlistsResponse.data.items || []
+      playlists: playlistsResponse.data.items || [],
+      transcripts: transcriptData
     };
+  }
+
+  async fetchTranscriptsForVideos(videos) {
+    const transcriptData = {};
+    
+    for (const video of videos) {
+      try {
+        const transcript = await this.fetchVideoTranscript(video.id);
+        if (transcript) {
+          transcriptData[video.id] = transcript;
+          console.log(`✅ Transcript found for: ${video.snippet.title.substring(0, 30)}...`);
+        }
+      } catch (error) {
+        console.log(`⚠️ No transcript for: ${video.snippet.title.substring(0, 30)}...`);
+        transcriptData[video.id] = null;
+      }
+    }
+    
+    return transcriptData;
+  }
+
+  async fetchVideoTranscript(videoId) {
+    try {
+      // First, get available captions
+      const captionsResponse = await this.youtube.captions.list({
+        part: ['snippet'],
+        videoId: videoId
+      });
+
+      if (!captionsResponse.data.items?.length) {
+        return null;
+      }
+
+      // Prefer auto-generated English captions or manual English captions
+      const caption = captionsResponse.data.items.find(item => 
+        item.snippet.language === 'en' || 
+        item.snippet.language === 'en-US' ||
+        item.snippet.trackKind === 'asr' // auto-generated
+      ) || captionsResponse.data.items[0];
+
+      if (!caption) {
+        return null;
+      }
+
+      // Download the transcript
+      const transcriptResponse = await this.youtube.captions.download({
+        id: caption.id,
+        tfmt: 'ttml' // XML format with timestamps
+      });
+
+      if (transcriptResponse.data) {
+        return this.parseTranscript(transcriptResponse.data);
+      }
+
+      return null;
+    } catch (error) {
+      // Transcripts might not be available or accessible
+      return null;
+    }
+  }
+
+  parseTranscript(ttmlData) {
+    try {
+      // Parse TTML/XML transcript data
+      // This is a simplified parser - in production you might want to use a proper XML parser
+      const text = ttmlData.toString();
+      
+      // Extract text content and timestamps
+      const sentences = [];
+      const timeRegex = /<p begin="([^"]+)"[^>]*>([^<]+)<\/p>/g;
+      let match;
+      
+      while ((match = timeRegex.exec(text)) !== null) {
+        const timestamp = this.parseTimestamp(match[1]);
+        const content = match[2].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+        
+        sentences.push({
+          timestamp: timestamp,
+          text: content.trim()
+        });
+      }
+
+      if (sentences.length === 0) {
+        // Fallback: extract all text content if timestamp parsing fails
+        const cleanText = text.replace(/<[^>]*>/g, ' ')
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/\s+/g, ' ')
+          .trim();
+        
+        if (cleanText) {
+          return {
+            fullText: cleanText,
+            sentences: [{ timestamp: 0, text: cleanText }],
+            duration: 0
+          };
+        }
+      }
+
+      const fullText = sentences.map(s => s.text).join(' ');
+      const duration = sentences.length > 0 ? sentences[sentences.length - 1].timestamp : 0;
+
+      return {
+        fullText: fullText,
+        sentences: sentences,
+        duration: duration
+      };
+    } catch (error) {
+      console.log('Error parsing transcript:', error.message);
+      return null;
+    }
+  }
+
+  parseTimestamp(timeStr) {
+    // Parse timestamp like "00:01:30.500" to seconds
+    try {
+      const parts = timeStr.split(':');
+      if (parts.length === 3) {
+        const hours = parseInt(parts[0]) || 0;
+        const minutes = parseInt(parts[1]) || 0;
+        const seconds = parseFloat(parts[2]) || 0;
+        return hours * 3600 + minutes * 60 + seconds;
+      }
+      return 0;
+    } catch (error) {
+      return 0;
+    }
+  }
+
+  // ============= TRANSCRIPT ANALYSIS METHODS =============
+
+  analyzeVideoTranscript(video, transcript) {
+    if (!transcript || !transcript.fullText) {
+      return {
+        available: false,
+        reason: 'No transcript available'
+      };
+    }
+
+    const text = transcript.fullText;
+    const sentences = transcript.sentences || [];
+    const duration = video.duration || transcript.duration || 0;
+
+    // Hook Analysis (first 30-60 seconds)
+    const hookAnalysis = this.analyzeTranscriptHook(sentences, text);
+    
+    // Speaking pace and filler words
+    const speechAnalysis = this.analyzeSpeechPatterns(text, duration);
+    
+    // Content delivery analysis
+    const contentDelivery = this.analyzeContentDelivery(video.title, text);
+    
+    // Educational structure
+    const structureAnalysis = this.analyzeVideoStructure(sentences, text);
+    
+    // Content density
+    const densityAnalysis = this.analyzeContentDensity(text, duration);
+
+    const overallScore = (
+      hookAnalysis.score * 0.25 +
+      speechAnalysis.score * 0.20 +
+      contentDelivery.score * 0.25 +
+      structureAnalysis.score * 0.15 +
+      densityAnalysis.score * 0.15
+    );
+
+    return {
+      available: true,
+      overallScore: overallScore,
+      hookAnalysis: hookAnalysis,
+      speechAnalysis: speechAnalysis,
+      contentDelivery: contentDelivery,
+      structureAnalysis: structureAnalysis,
+      densityAnalysis: densityAnalysis,
+      wordCount: text.split(' ').length,
+      duration: duration,
+      transcriptQuality: sentences.length > 0 ? 'Timestamped' : 'Basic'
+    };
+  }
+
+  analyzeTranscriptHook(sentences, fullText) {
+    // Analyze the first 30-60 seconds for hook effectiveness
+    const first30Seconds = sentences.filter(s => s.timestamp <= 30);
+    const first60Seconds = sentences.filter(s => s.timestamp <= 60);
+    
+    const hook30 = first30Seconds.map(s => s.text).join(' ');
+    const hook60 = first60Seconds.map(s => s.text).join(' ');
+
+    let score = 50; // Base score
+    const insights = [];
+
+    // Hook elements to look for
+    const hookElements = {
+      question: /\?|what|how|why|when|where|who/i,
+      promise: /will|going to|learn|discover|find out|reveal|show you/i,
+      urgency: /today|right now|immediately|urgent|breaking|latest/i,
+      preview: /first|second|third|number|step|tip|secret/i,
+      problem: /problem|issue|mistake|wrong|error|struggle/i,
+      benefit: /save|earn|gain|get|achieve|improve|better|faster/i
+    };
+
+    let elementsFound = 0;
+    Object.entries(hookElements).forEach(([element, regex]) => {
+      if (regex.test(hook60)) {
+        elementsFound++;
+        score += 10;
+        insights.push(`Has ${element} element`);
+      }
+    });
+
+    // Penalize slow starts
+    if (hook30.length < 50) {
+      score -= 20;
+      insights.push('Very slow start (under 50 words in first 30s)');
+    } else if (hook30.length < 100) {
+      score -= 10;
+      insights.push('Slow start (under 100 words in first 30s)');
+    }
+
+    // Bonus for strong opening
+    if (hook30.toLowerCase().includes('hey') || hook30.toLowerCase().includes('welcome')) {
+      score += 5;
+      insights.push('Good greeting');
+    }
+
+    return {
+      score: Math.min(Math.max(score, 0), 100),
+      elementsFound: elementsFound,
+      first30Words: hook30.split(' ').length,
+      first60Words: hook60.split(' ').length,
+      hookText: hook60.substring(0, 200) + (hook60.length > 200 ? '...' : ''),
+      insights: insights
+    };
+  }
+
+  analyzeSpeechPatterns(text, duration) {
+    const words = text.split(' ');
+    const wordCount = words.length;
+    
+    let score = 70; // Base score
+    const insights = [];
+
+    // Calculate speaking pace (words per minute)
+    const wordsPerMinute = duration > 0 ? (wordCount / (duration / 60)) : 0;
+    
+    // Optimal range is 130-170 WPM for educational content
+    if (wordsPerMinute < 100) {
+      score -= 20;
+      insights.push(`Very slow pace (${Math.round(wordsPerMinute)} WPM)`);
+    } else if (wordsPerMinute < 130) {
+      score -= 10;
+      insights.push(`Slow pace (${Math.round(wordsPerMinute)} WPM)`);
+    } else if (wordsPerMinute > 200) {
+      score -= 15;
+      insights.push(`Very fast pace (${Math.round(wordsPerMinute)} WPM)`);
+    } else if (wordsPerMinute > 170) {
+      score -= 5;
+      insights.push(`Fast pace (${Math.round(wordsPerMinute)} WPM)`);
+    } else {
+      score += 10;
+      insights.push(`Good pace (${Math.round(wordsPerMinute)} WPM)`);
+    }
+
+    // Count filler words
+    const fillerWords = ['um', 'uh', 'like', 'you know', 'so', 'basically', 'actually', 'literally'];
+    let fillerCount = 0;
+    
+    fillerWords.forEach(filler => {
+      const regex = new RegExp(`\\b${filler}\\b`, 'gi');
+      const matches = text.match(regex);
+      if (matches) {
+        fillerCount += matches.length;
+      }
+    });
+
+    const fillerRate = (fillerCount / wordCount) * 100;
+    
+    if (fillerRate > 5) {
+      score -= 20;
+      insights.push(`High filler word usage (${fillerRate.toFixed(1)}%)`);
+    } else if (fillerRate > 2) {
+      score -= 10;
+      insights.push(`Moderate filler word usage (${fillerRate.toFixed(1)}%)`);
+    } else {
+      score += 5;
+      insights.push(`Low filler word usage (${fillerRate.toFixed(1)}%)`);
+    }
+
+    return {
+      score: Math.min(Math.max(score, 0), 100),
+      wordsPerMinute: Math.round(wordsPerMinute),
+      fillerCount: fillerCount,
+      fillerRate: parseFloat(fillerRate.toFixed(2)),
+      totalWords: wordCount,
+      insights: insights
+    };
+  }
+
+  analyzeContentDelivery(title, transcript) {
+    let score = 60; // Base score
+    const insights = [];
+
+    // Extract promises from title
+    const titlePromises = this.extractTitlePromises(title);
+    
+    // Check if content delivers on title promises
+    let promisesDelivered = 0;
+    titlePromises.forEach(promise => {
+      if (transcript.toLowerCase().includes(promise.toLowerCase())) {
+        promisesDelivered++;
+        score += 10;
+      }
+    });
+
+    const deliveryRate = titlePromises.length > 0 ? (promisesDelivered / titlePromises.length) * 100 : 100;
+    
+    if (deliveryRate >= 80) {
+      insights.push(`Delivers on ${promisesDelivered}/${titlePromises.length} title promises`);
+    } else if (deliveryRate >= 50) {
+      insights.push(`Partially delivers on title promises (${promisesDelivered}/${titlePromises.length})`);
+      score -= 10;
+    } else {
+      insights.push(`Poor delivery on title promises (${promisesDelivered}/${titlePromises.length})`);
+      score -= 20;
+    }
+
+    // Check for educational markers
+    const educationalMarkers = ['first', 'second', 'third', 'next', 'now', 'step', 'tip', 'important', 'remember'];
+    const markerCount = educationalMarkers.filter(marker => 
+      transcript.toLowerCase().includes(marker)
+    ).length;
+
+    if (markerCount >= 5) {
+      score += 10;
+      insights.push('Good use of educational structure words');
+    } else if (markerCount < 2) {
+      score -= 5;
+      insights.push('Limited use of structure words');
+    }
+
+    return {
+      score: Math.min(Math.max(score, 0), 100),
+      titlePromises: titlePromises,
+      promisesDelivered: promisesDelivered,
+      deliveryRate: parseFloat(deliveryRate.toFixed(1)),
+      educationalMarkers: markerCount,
+      insights: insights
+    };
+  }
+
+  analyzeVideoStructure(sentences, fullText) {
+    let score = 60;
+    const insights = [];
+
+    // Look for intro patterns
+    const intro = sentences.slice(0, 5).map(s => s.text).join(' ').toLowerCase();
+    const hasIntro = /welcome|hello|today|going to|will|show you|teach|learn/.test(intro);
+    
+    if (hasIntro) {
+      score += 15;
+      insights.push('Clear introduction detected');
+    } else {
+      score -= 10;
+      insights.push('No clear introduction');
+    }
+
+    // Look for conclusion patterns
+    const conclusion = sentences.slice(-5).map(s => s.text).join(' ').toLowerCase();
+    const hasConclusion = /conclusion|summary|recap|remember|subscribe|like|comment|thanks|that\'s it/.test(conclusion);
+    
+    if (hasConclusion) {
+      score += 15;
+      insights.push('Clear conclusion detected');
+    } else {
+      score -= 10;
+      insights.push('No clear conclusion');
+    }
+
+    // Check for section transitions
+    const transitionWords = ['next', 'now', 'moving on', 'another', 'also', 'additionally', 'furthermore'];
+    const transitionCount = transitionWords.filter(word => 
+      fullText.toLowerCase().includes(word)
+    ).length;
+
+    if (transitionCount >= 3) {
+      score += 10;
+      insights.push('Good use of transitions');
+    } else if (transitionCount < 1) {
+      score -= 5;
+      insights.push('Limited transitions between topics');
+    }
+
+    return {
+      score: Math.min(Math.max(score, 0), 100),
+      hasIntro: hasIntro,
+      hasConclusion: hasConclusion,
+      transitionCount: transitionCount,
+      insights: insights
+    };
+  }
+
+  analyzeContentDensity(text, duration) {
+    const words = text.split(' ');
+    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    
+    let score = 60;
+    const insights = [];
+
+    // Information density (average words per sentence)
+    const avgWordsPerSentence = words.length / sentences.length;
+    
+    if (avgWordsPerSentence < 8) {
+      score -= 10;
+      insights.push('Very short sentences - may lack detail');
+    } else if (avgWordsPerSentence > 25) {
+      score -= 10;
+      insights.push('Very long sentences - may be hard to follow');
+    } else if (avgWordsPerSentence >= 12 && avgWordsPerSentence <= 18) {
+      score += 10;
+      insights.push('Good sentence length for comprehension');
+    }
+
+    // Content-to-time ratio
+    const minutesOfContent = duration / 60;
+    const wordsPerMinute = words.length / minutesOfContent;
+    
+    // Look for "value words" that indicate substantive content
+    const valueWords = ['how', 'why', 'because', 'method', 'technique', 'strategy', 'important', 'key', 'essential', 'crucial'];
+    const valueWordCount = valueWords.filter(word => 
+      text.toLowerCase().includes(word)
+    ).length;
+
+    const valueWordDensity = (valueWordCount / words.length) * 100;
+    
+    if (valueWordDensity >= 2) {
+      score += 15;
+      insights.push('High value content density');
+    } else if (valueWordDensity < 0.5) {
+      score -= 10;
+      insights.push('Low value content density');
+    }
+
+    return {
+      score: Math.min(Math.max(score, 0), 100),
+      avgWordsPerSentence: parseFloat(avgWordsPerSentence.toFixed(1)),
+      totalSentences: sentences.length,
+      valueWordCount: valueWordCount,
+      valueWordDensity: parseFloat(valueWordDensity.toFixed(2)),
+      insights: insights
+    };
+  }
+
+  extractTitlePromises(title) {
+    const promises = [];
+    
+    // Look for numbers (like "5 tips", "10 ways")
+    const numberMatch = title.match(/(\d+)\s+(\w+)/g);
+    if (numberMatch) {
+      promises.push(...numberMatch);
+    }
+
+    // Look for promise words
+    const promiseWords = ['how to', 'guide', 'tutorial', 'tips', 'secrets', 'mistakes', 'ways', 'methods'];
+    promiseWords.forEach(word => {
+      if (title.toLowerCase().includes(word)) {
+        promises.push(word);
+      }
+    });
+
+    // Look for specific topics mentioned
+    const topics = title.split(' ').filter(word => 
+      word.length > 4 && 
+      !['video', 'guide', 'tutorial', 'review'].includes(word.toLowerCase())
+    );
+    
+    promises.push(...topics.slice(0, 3)); // Add up to 3 main topics
+
+    return [...new Set(promises)]; // Remove duplicates
+  }
+
+  analyzeTranscriptsComprehensive(videoAnalyses, transcripts) {
+    const videosWithTranscripts = videoAnalyses.filter(v => v.transcriptAnalysis?.available);
+    const totalVideos = videoAnalyses.length;
+    
+    if (videosWithTranscripts.length === 0) {
+      return {
+        overallScore: 0,
+        transcriptsAvailable: 0,
+        coveragePercentage: 0,
+        insights: ['No transcripts available for analysis'],
+        recommendations: [
+          'Enable auto-generated captions on YouTube',
+          'Consider adding manual captions for better accuracy',
+          'Use clear speech and good audio quality to improve auto-captions'
+        ]
+      };
+    }
+
+    // Calculate average scores across all available transcripts
+    const avgHookScore = this.calculateAverage(videosWithTranscripts, 'transcriptAnalysis.hookAnalysis.score');
+    const avgSpeechScore = this.calculateAverage(videosWithTranscripts, 'transcriptAnalysis.speechAnalysis.score');
+    const avgDeliveryScore = this.calculateAverage(videosWithTranscripts, 'transcriptAnalysis.contentDelivery.score');
+    const avgStructureScore = this.calculateAverage(videosWithTranscripts, 'transcriptAnalysis.structureAnalysis.score');
+    const avgDensityScore = this.calculateAverage(videosWithTranscripts, 'transcriptAnalysis.densityAnalysis.score');
+
+    const overallScore = (
+      avgHookScore * 0.25 +
+      avgSpeechScore * 0.20 +
+      avgDeliveryScore * 0.25 +
+      avgStructureScore * 0.15 +
+      avgDensityScore * 0.15
+    );
+
+    // Generate insights
+    const insights = this.generateTranscriptInsights(videosWithTranscripts);
+    const recommendations = this.generateTranscriptRecommendations(videosWithTranscripts);
+
+    return {
+      overallScore: overallScore,
+      transcriptsAvailable: videosWithTranscripts.length,
+      coveragePercentage: parseFloat(((videosWithTranscripts.length / totalVideos) * 100).toFixed(1)),
+      avgHookScore: avgHookScore,
+      avgSpeechScore: avgSpeechScore,
+      avgDeliveryScore: avgDeliveryScore,
+      avgStructureScore: avgStructureScore,
+      avgDensityScore: avgDensityScore,
+      insights: insights,
+      recommendations: recommendations,
+      speechPatterns: this.analyzeSpeechPatternsAcrossVideos(videosWithTranscripts),
+      contentDeliveryPatterns: this.analyzeContentDeliveryPatterns(videosWithTranscripts)
+    };
+  }
+
+  calculateAverage(videos, path) {
+    const values = videos.map(video => {
+      const pathParts = path.split('.');
+      let value = video;
+      for (const part of pathParts) {
+        value = value?.[part];
+      }
+      return value || 0;
+    });
+    
+    return values.reduce((sum, val) => sum + val, 0) / values.length || 0;
+  }
+
+  generateTranscriptInsights(videosWithTranscripts) {
+    const insights = [];
+    
+    // Analyze speaking pace patterns
+    const speeds = videosWithTranscripts.map(v => v.transcriptAnalysis.speechAnalysis.wordsPerMinute);
+    const avgSpeed = speeds.reduce((sum, s) => sum + s, 0) / speeds.length;
+    
+    if (avgSpeed < 120) {
+      insights.push(`Speaking pace is slow (${Math.round(avgSpeed)} WPM) - consider more energy`);
+    } else if (avgSpeed > 180) {
+      insights.push(`Speaking pace is fast (${Math.round(avgSpeed)} WPM) - consider slowing down`);
+    } else {
+      insights.push(`Speaking pace is good (${Math.round(avgSpeed)} WPM)`);
+    }
+
+    // Analyze hook effectiveness
+    const hookScores = videosWithTranscripts.map(v => v.transcriptAnalysis.hookAnalysis.score);
+    const avgHookScore = hookScores.reduce((sum, s) => sum + s, 0) / hookScores.length;
+    
+    if (avgHookScore < 60) {
+      insights.push(`Video hooks need improvement (avg ${Math.round(avgHookScore)}/100)`);
+    } else {
+      insights.push(`Video hooks are effective (avg ${Math.round(avgHookScore)}/100)`);
+    }
+
+    // Analyze filler word usage
+    const fillerRates = videosWithTranscripts.map(v => v.transcriptAnalysis.speechAnalysis.fillerRate);
+    const avgFillerRate = fillerRates.reduce((sum, r) => sum + r, 0) / fillerRates.length;
+    
+    if (avgFillerRate > 3) {
+      insights.push(`High filler word usage (${avgFillerRate.toFixed(1)}%) - practice smoother delivery`);
+    } else if (avgFillerRate < 1) {
+      insights.push(`Excellent speech clarity with minimal filler words (${avgFillerRate.toFixed(1)}%)`);
+    }
+
+    return insights;
+  }
+
+  generateTranscriptRecommendations(videosWithTranscripts) {
+    const recommendations = [];
+    
+    // Hook recommendations
+    const weakHooks = videosWithTranscripts.filter(v => v.transcriptAnalysis.hookAnalysis.score < 60);
+    if (weakHooks.length > videosWithTranscripts.length * 0.5) {
+      recommendations.push({
+        priority: 'High',
+        category: 'Video Hooks',
+        action: 'Improve video openings with stronger hooks in first 30 seconds',
+        impact: 'Better audience retention'
+      });
+    }
+
+    // Speech pattern recommendations
+    const fastSpeakers = videosWithTranscripts.filter(v => v.transcriptAnalysis.speechAnalysis.wordsPerMinute > 180);
+    if (fastSpeakers.length > videosWithTranscripts.length * 0.3) {
+      recommendations.push({
+        priority: 'Medium',
+        category: 'Speaking Pace',
+        action: 'Slow down speaking pace for better comprehension',
+        impact: 'Improved viewer understanding'
+      });
+    }
+
+    // Filler word recommendations
+    const highFillerVideos = videosWithTranscripts.filter(v => v.transcriptAnalysis.speechAnalysis.fillerRate > 3);
+    if (highFillerVideos.length > 0) {
+      recommendations.push({
+        priority: 'Medium',
+        category: 'Speech Quality',
+        action: 'Reduce filler words through practice and preparation',
+        impact: 'More professional delivery'
+      });
+    }
+
+    return recommendations;
+  }
+
+  analyzeSpeechPatternsAcrossVideos(videos) {
+    const patterns = {
+      avgWordsPerMinute: this.calculateAverage(videos, 'transcriptAnalysis.speechAnalysis.wordsPerMinute'),
+      avgFillerRate: this.calculateAverage(videos, 'transcriptAnalysis.speechAnalysis.fillerRate'),
+      consistentPace: this.calculateConsistency(videos.map(v => v.transcriptAnalysis.speechAnalysis.wordsPerMinute))
+    };
+
+    return patterns;
+  }
+
+  analyzeContentDeliveryPatterns(videos) {
+    const patterns = {
+      avgDeliveryRate: this.calculateAverage(videos, 'transcriptAnalysis.contentDelivery.deliveryRate'),
+      consistentDelivery: this.calculateConsistency(videos.map(v => v.transcriptAnalysis.contentDelivery.deliveryRate))
+    };
+
+    return patterns;
+  }
+
+  calculateConsistency(values) {
+    if (values.length < 2) return 100;
+    
+    const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
+    const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
+    const stdDev = Math.sqrt(variance);
+    
+    // Convert to percentage (lower stdDev = higher consistency)
+    return Math.max(0, 100 - (stdDev / mean) * 100);
   }
 
   performAnalysis(data) {
     console.log('🔍 Performing comprehensive channel analysis...');
     
-    const { channel, videos, playlists } = data;
+    const { channel, videos, playlists, transcripts } = data;
     const stats = channel.statistics;
     const snippet = channel.snippet;
     const brandingSettings = channel.brandingSettings || {};
@@ -143,7 +800,7 @@ class YouTubeChannelAnalyzer {
     const totalViews = parseInt(stats.totalViews) || 0;
     const videoCount = parseInt(stats.videoCount) || 0;
     
-    const videoAnalysis = videos.map(video => this.analyzeVideoComprehensive(video));
+    const videoAnalysis = videos.map(video => this.analyzeVideoComprehensive(video, transcripts));
     
     const brandingAnalysis = this.analyzeBrandingComprehensive(channel, brandingSettings);
     const contentStrategy = this.analyzeContentStrategyComprehensive(videoAnalysis, snippet);
@@ -151,6 +808,9 @@ class YouTubeChannelAnalyzer {
     const engagementSignals = this.analyzeEngagementSignalsComprehensive(videoAnalysis, subscriberCount);
     const contentQuality = this.analyzeContentQualityComprehensive(videoAnalysis);
     const playlistStructure = this.analyzePlaylistStructureComprehensive(playlists, videoAnalysis);
+    
+    // NEW: Transcript Analysis
+    const transcriptAnalysis = this.analyzeTranscriptsComprehensive(videoAnalysis, transcripts);
     
     return {
       timestamp: new Date().toISOString(),
@@ -171,13 +831,15 @@ class YouTubeChannelAnalyzer {
       engagementSignals: engagementSignals,
       contentQuality: contentQuality,
       playlistStructure: playlistStructure,
+      transcriptAnalysis: transcriptAnalysis, // NEW
       overallScores: {
         brandingScore: brandingAnalysis.overallScore,
         contentStrategyScore: contentStrategy.overallScore,
         seoScore: seoAnalysis.overallScore,
         engagementScore: engagementSignals.overallScore,
         contentQualityScore: contentQuality.overallScore,
-        playlistScore: playlistStructure.overallScore
+        playlistScore: playlistStructure.overallScore,
+        transcriptScore: transcriptAnalysis.overallScore // NEW
       },
       priorityRecommendations: this.generatePriorityRecommendations({
         branding: brandingAnalysis,
@@ -185,14 +847,15 @@ class YouTubeChannelAnalyzer {
         seo: seoAnalysis,
         engagement: engagementSignals,
         quality: contentQuality,
-        playlists: playlistStructure
+        playlists: playlistStructure,
+        transcripts: transcriptAnalysis // NEW
       }),
       videos: videoAnalysis.slice(0, 15),
       analysisDate: new Date().toISOString()
     };
   }
 
-  analyzeVideoComprehensive(video) {
+  analyzeVideoComprehensive(video, transcripts) {
     const stats = video.statistics;
     const snippet = video.snippet;
     const contentDetails = video.contentDetails;
@@ -206,6 +869,10 @@ class YouTubeChannelAnalyzer {
     const description = snippet.description || '';
     const tags = snippet.tags || [];
     const duration = this.parseDuration(contentDetails?.duration);
+    
+    // NEW: Transcript analysis for this video
+    const transcript = transcripts ? transcripts[video.id] : null;
+    const transcriptAnalysis = transcript ? this.analyzeVideoTranscript(video, transcript) : null;
     
     return {
       id: video.id,
@@ -231,7 +898,8 @@ class YouTubeChannelAnalyzer {
       contentStructure: this.analyzeContentStructure(description),
       likeToViewRatio: views > 0 ? (likes / views) * 100 : 0,
       commentToViewRatio: views > 0 ? (comments / views) * 100 : 0,
-      format: this.classifyVideoFormat(duration, title)
+      format: this.classifyVideoFormat(duration, title),
+      transcriptAnalysis: transcriptAnalysis // NEW
     };
   }
 
@@ -1196,17 +1864,60 @@ class YouTubeChannelAnalyzer {
   }
 
   analyzeContentThemes(videos) {
-    const allTags = videos.flatMap(v => v.tags);
-    const tagFreq = {};
+    let topThemes = [];
+    let themeSource = '';
+    let analysisDetails = {};
     
-    allTags.forEach(tag => {
-      tagFreq[tag] = (tagFreq[tag] || 0) + 1;
+    // Comprehensive content analysis from titles, descriptions, and tags
+    const contentText = videos.map(video => {
+      const title = video.title || '';
+      const description = video.description || '';
+      const tags = (video.tags || []).join(' ');
+      
+      return {
+        title: title.toLowerCase(),
+        description: description.toLowerCase().substring(0, 500), // First 500 chars of description
+        tags: tags.toLowerCase(),
+        combined: `${title} ${description} ${tags}`.toLowerCase()
+      };
     });
     
-    const topThemes = Object.entries(tagFreq)
-      .sort(([,a], [,b]) => b - a)
-      .slice(0, 8)
-      .map(([tag, count]) => ({ theme: tag, frequency: count }));
+    // Extract meaningful themes from all content
+    const themeKeywords = this.extractContentThemes(contentText);
+    
+    if (themeKeywords.length > 0) {
+      topThemes = themeKeywords;
+      themeSource = 'comprehensive'; // titles + descriptions + tags
+      analysisDetails = {
+        titlesAnalyzed: videos.length,
+        descriptionsAnalyzed: videos.filter(v => v.description && v.description.length > 50).length,
+        tagsAnalyzed: videos.filter(v => v.tags && v.tags.length > 0).length,
+        totalKeywordsFound: themeKeywords.length
+      };
+    } else {
+      // Fallback: just common title words
+      themeSource = 'titles_only';
+      const titleWords = videos.flatMap(v => {
+        return v.title.toLowerCase()
+          .replace(/[^\w\s]/g, '')
+          .split(' ')
+          .filter(word => 
+            word.length > 3 && 
+            !['this', 'that', 'with', 'from', 'they', 'have', 'been', 'will', 'your', 'what', 'how', 'why', 'when', 'where', 'the', 'and', 'for'].includes(word)
+          );
+      });
+      
+      const wordFreq = {};
+      titleWords.forEach(word => {
+        wordFreq[word] = (wordFreq[word] || 0) + 1;
+      });
+      
+      topThemes = Object.entries(wordFreq)
+        .filter(([word, count]) => count >= 2)
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, 8)
+        .map(([word, count]) => ({ theme: word, frequency: count }));
+    }
     
     const clarityScore = topThemes.length >= 3 ? 85 : topThemes.length >= 1 ? 60 : 30;
     
@@ -1214,8 +1925,114 @@ class YouTubeChannelAnalyzer {
       clarityScore,
       primaryThemes: topThemes.slice(0, 5),
       themeConsistency: this.calculateThemeConsistency(topThemes),
-      focusRecommendation: topThemes.length > 6 ? 'Narrow focus to 3-5 core themes' : 'Good thematic focus'
+      focusRecommendation: topThemes.length > 6 ? 'Narrow focus to 3-5 core themes' : 
+                          topThemes.length === 0 ? 'No clear themes identified - consider more consistent topic focus' : 
+                          'Good thematic focus',
+      themeSource: themeSource,
+      totalThemesFound: topThemes.length,
+      analysisDetails: analysisDetails
     };
+  }
+
+  extractContentThemes(contentData) {
+    // Define comprehensive topic categories and keywords
+    const topicCategories = {
+      // Technology & Programming
+      'programming': ['programming', 'coding', 'code', 'developer', 'development', 'software', 'algorithm', 'debug'],
+      'javascript': ['javascript', 'js', 'node', 'react', 'angular', 'vue', 'typescript', 'npm'],
+      'python': ['python', 'django', 'flask', 'pandas', 'numpy', 'machine learning', 'data science'],
+      'web development': ['web', 'html', 'css', 'frontend', 'backend', 'fullstack', 'website', 'responsive'],
+      'mobile': ['mobile', 'app', 'android', 'ios', 'swift', 'kotlin', 'flutter', 'react native'],
+      
+      // Business & Finance
+      'business': ['business', 'entrepreneur', 'startup', 'marketing', 'sales', 'strategy', 'growth'],
+      'finance': ['finance', 'money', 'investing', 'stocks', 'crypto', 'trading', 'wealth', 'budget'],
+      'personal finance': ['personal finance', 'budgeting', 'savings', 'debt', 'credit', 'retirement'],
+      
+      // Education & Tutorials
+      'tutorial': ['tutorial', 'guide', 'how to', 'learn', 'teach', 'education', 'lesson', 'course'],
+      'tips': ['tips', 'tricks', 'hacks', 'advice', 'best practices', 'secrets', 'methods'],
+      'beginner': ['beginner', 'basics', 'fundamentals', 'introduction', 'getting started', 'first time'],
+      
+      // Lifestyle & Personal
+      'fitness': ['fitness', 'workout', 'exercise', 'gym', 'health', 'nutrition', 'weight loss'],
+      'cooking': ['cooking', 'recipe', 'food', 'kitchen', 'baking', 'meal', 'chef'],
+      'travel': ['travel', 'trip', 'vacation', 'destination', 'adventure', 'explore', 'journey'],
+      
+      // Creative & Arts
+      'music': ['music', 'song', 'guitar', 'piano', 'singing', 'musician', 'album', 'band'],
+      'art': ['art', 'drawing', 'painting', 'design', 'creative', 'illustration', 'sketch'],
+      'photography': ['photography', 'photo', 'camera', 'lens', 'editing', 'photoshop', 'portrait'],
+      
+      // Gaming & Entertainment
+      'gaming': ['gaming', 'game', 'video game', 'gameplay', 'streamer', 'console', 'pc gaming'],
+      'entertainment': ['entertainment', 'movie', 'tv show', 'celebrity', 'review', 'reaction'],
+      
+      // Tools & Productivity
+      'tools': ['tools', 'software', 'app', 'productivity', 'workflow', 'automation', 'efficiency'],
+      'reviews': ['review', 'comparison', 'vs', 'testing', 'unboxing', 'first look', 'opinion']
+    };
+    
+    const themeFrequency = {};
+    
+    // Analyze all content for themes
+    contentData.forEach(content => {
+      Object.entries(topicCategories).forEach(([theme, keywords]) => {
+        let score = 0;
+        
+        keywords.forEach(keyword => {
+          // Check in title (weighted more heavily)
+          if (content.title.includes(keyword)) score += 3;
+          // Check in description
+          if (content.description.includes(keyword)) score += 2;
+          // Check in tags
+          if (content.tags.includes(keyword)) score += 1;
+        });
+        
+        if (score > 0) {
+          themeFrequency[theme] = (themeFrequency[theme] || 0) + score;
+        }
+      });
+    });
+    
+    // Convert to sorted array and return top themes
+    return Object.entries(themeFrequency)
+      .filter(([theme, score]) => score >= 3) // Only themes with meaningful presence
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 10)
+      .map(([theme, score]) => ({ 
+        theme: theme, 
+        frequency: score,
+        videos_mentioned: Math.min(score, contentData.length) // Approximate videos that mention this theme
+      }));
+  }
+
+  getThemeDescription(theme) {
+    const descriptions = {
+      'programming': 'Software development & coding',
+      'javascript': 'JavaScript & web frameworks',
+      'python': 'Python programming & data science',
+      'web development': 'Frontend & backend web dev',
+      'mobile': 'Mobile app development',
+      'business': 'Business & entrepreneurship',
+      'finance': 'Finance & investing',
+      'personal finance': 'Personal money management',
+      'tutorial': 'Educational content & guides',
+      'tips': 'Tips, tricks & advice',
+      'beginner': 'Beginner-friendly content',
+      'fitness': 'Health & fitness',
+      'cooking': 'Food & cooking',
+      'travel': 'Travel & adventure',
+      'music': 'Music & audio',
+      'art': 'Art & creative content',
+      'photography': 'Photography & editing',
+      'gaming': 'Gaming & esports',
+      'entertainment': 'Entertainment & reviews',
+      'tools': 'Tools & productivity',
+      'reviews': 'Product reviews & comparisons'
+    };
+    
+    return descriptions[theme] || 'Content topic';
   }
 
   calculateThemeConsistency(themes) {
@@ -2167,13 +2984,39 @@ class YouTubeChannelAnalyzer {
         ['', '', '', '', ''],
         
         ['🏷️ CONTENT THEMES BREAKDOWN', '', '', '', ''],
-        ['Theme', 'Frequency', 'Percentage', '', ''],
-        ...analysis.contentStrategy.contentThemes.primaryThemes.map(theme => [
-          theme.theme,
-          theme.frequency,
-          `${((theme.frequency / analysis.videos.length) * 100).toFixed(1)}%`,
-          '',
-          ''
+        ['Analysis Type:', analysis.contentStrategy.contentThemes.themeSource === 'comprehensive' ? 
+          'Comprehensive (titles + descriptions + tags)' : 'Basic (titles only)', '', '', ''],
+        ['Content Sources Analyzed:', '', '', '', ''],
+        ['  • Video Titles:', analysis.contentStrategy.contentThemes.analysisDetails?.titlesAnalyzed || analysis.videos.length, '', '', ''],
+        ['  • Descriptions with Content:', analysis.contentStrategy.contentThemes.analysisDetails?.descriptionsAnalyzed || 'N/A', '', '', ''],
+        ['  • Videos with Tags:', analysis.contentStrategy.contentThemes.analysisDetails?.tagsAnalyzed || 'N/A', '', '', ''],
+        ['', '', '', '', ''],
+        ...(analysis.contentStrategy.contentThemes.primaryThemes.length > 0 ? [
+          ['Primary Content Themes:', '', '', '', ''],
+          ['Theme', 'Strength Score', 'Est. Videos', 'Content Focus', ''],
+          ...analysis.contentStrategy.contentThemes.primaryThemes.map(theme => [
+            theme.theme.charAt(0).toUpperCase() + theme.theme.slice(1), // Capitalize first letter
+            theme.frequency,
+            theme.videos_mentioned || Math.round((theme.frequency / analysis.videos.length) * 100) + '%',
+            this.getThemeDescription(theme.theme),
+            ''
+          ]),
+          ['', '', '', '', ''],
+          ['📊 Theme Analysis Summary:', '', '', '', ''],
+          ['Theme Focus:', analysis.contentStrategy.contentThemes.focusRecommendation, '', '', ''],
+          ['Content Consistency:', `${analysis.contentStrategy.contentThemes.themeConsistency.toFixed(1)}%`, '', '', '']
+        ] : [
+          ['❌ NO CLEAR THEMES IDENTIFIED', '', '', '', ''],
+          ['Analysis Result:', 'Cannot identify consistent content themes', '', '', ''],
+          ['Possible Reasons:', '', '', '', ''],
+          ['  • Content covers too many unrelated topics', '', '', '', ''],
+          ['  • Video titles/descriptions lack descriptive keywords', '', '', '', ''],
+          ['  • Missing or inadequate tags', '', '', '', ''],
+          ['Recommendations:', '', '', '', ''],
+          ['  • Focus on 3-5 core topic areas', '', '', '', ''],
+          ['  • Use more descriptive titles with topic keywords', '', '', '', ''],
+          ['  • Add relevant tags to categorize content', '', '', '', ''],
+          ['  • Write detailed descriptions mentioning main topics', '', '', '', '']
         ]),
         ['', '', '', '', ''],
         
