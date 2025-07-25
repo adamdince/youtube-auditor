@@ -1,4 +1,4 @@
-// src/analyze.js - Conservative YouTube Channel Analyzer with Enhanced Dashboard
+// src/analyze.js - Enhanced YouTube Channel Analyzer with Professional Dashboard
 const { google } = require('googleapis');
 const fs = require('fs').promises;
 
@@ -235,9 +235,9 @@ class YouTubeChannelAnalyzer {
     };
   }
 
-  // ENHANCED GOOGLE SHEETS DASHBOARD METHOD
+  // ENHANCED GOOGLE SHEETS DASHBOARD METHOD - COMPLETELY REDESIGNED
   async writeToSheets(analysis) {
-    console.log('📝 Creating enhanced dashboard in Google Sheets...');
+    console.log('📝 Creating professional dashboard in Google Sheets...');
     
     const sheetId = process.env.GOOGLE_SHEET_ID;
     if (!sheetId) {
@@ -253,26 +253,43 @@ class YouTubeChannelAnalyzer {
         range: 'A1:Z1000'
       });
 
-      // Helper functions (self-contained within this method)
+      // Helper functions for better data presentation
+      const getScoreColor = (score) => {
+        if (!score && score !== 0) return { red: 0.9, green: 0.9, blue: 0.9 };
+        if (score >= 90) return { red: 0.2, green: 0.7, blue: 0.3 }; // Green
+        if (score >= 80) return { red: 0.4, green: 0.8, blue: 0.4 }; // Light green
+        if (score >= 70) return { red: 0.9, green: 0.9, blue: 0.3 }; // Yellow
+        if (score >= 60) return { red: 1, green: 0.7, blue: 0.3 }; // Orange
+        if (score >= 50) return { red: 1, green: 0.5, blue: 0.3 }; // Dark orange
+        return { red: 0.9, green: 0.3, blue: 0.3 }; // Red
+      };
+
       const getScoreGradeLocal = (score) => {
         if (!score && score !== 0) return 'N/A';
-        if (score >= 90) return '🏆 Excellent';
-        if (score >= 80) return '🥇 Very Good';
-        if (score >= 70) return '🥈 Good';
-        if (score >= 60) return '🥉 Fair';
-        if (score >= 50) return '⚠️ Needs Improvement';
-        return '❌ Poor';
+        if (score >= 90) return 'EXCELLENT';
+        if (score >= 80) return 'VERY GOOD';
+        if (score >= 70) return 'GOOD';
+        if (score >= 60) return 'FAIR';
+        if (score >= 50) return 'NEEDS WORK';
+        return 'POOR';
       };
 
       const getScoreValue = (score) => {
-        return score ? `${score.toFixed(0)}/100` : 'N/A';
+        return score ? Math.round(score) : 'N/A';
       };
 
-      const getTopIssue = (video) => {
-        if (!video.tags || video.tags.length === 0) return '🏷️ NO TAGS';
-        if (video.title.length < 30) return '📝 SHORT TITLE';
-        if (!video.description || video.description.length < 100) return '📄 POOR DESC';
-        return '✅ Good';
+      const getPriorityColor = (priority) => {
+        switch(priority?.toLowerCase()) {
+          case 'high':
+          case 'critical':
+            return { red: 0.9, green: 0.3, blue: 0.3 };
+          case 'medium':
+            return { red: 1, green: 0.7, blue: 0.3 };
+          case 'low':
+            return { red: 0.4, green: 0.8, blue: 0.4 };
+          default:
+            return { red: 0.95, green: 0.95, blue: 0.95 };
+        }
       };
 
       const getCriticalIssues = () => {
@@ -280,166 +297,203 @@ class YouTubeChannelAnalyzer {
         
         if (analysis.seoMetadata.tags.videosWithNoTagsCount > 0) {
           issues.push([
-            '🚨 CRITICAL: Missing Tags',
+            'MISSING TAGS',
             `${analysis.seoMetadata.tags.videosWithNoTagsCount} videos have NO TAGS`,
-            'HIGH PRIORITY',
+            'CRITICAL',
             'Add 8-15 relevant tags to each video',
-            'Expected Impact: Immediate discoverability boost',
-            'Time Required: 2-3 hours total',
-            '', ''
+            'Immediate SEO boost',
+            '2-3 hours'
           ]);
         }
         
         if (analysis.seoMetadata.titles.optimalLengthPercentage < 50) {
           const shortTitles = Math.round((1 - analysis.seoMetadata.titles.optimalLengthPercentage/100) * analysis.videos.length);
           issues.push([
-            '⚠️ WARNING: Short Titles',
-            `${shortTitles} titles are under 30 characters`,
-            'MEDIUM PRIORITY',
-            'Extend titles to 40-60 characters with keywords',
-            'Expected Impact: Better SEO and CTR',
-            'Time Required: 1-2 hours',
-            '', ''
+            'SHORT TITLES',
+            `${shortTitles} titles under 30 characters`,
+            'HIGH',
+            'Extend titles to 40-60 characters',
+            'Better CTR & SEO',
+            '1-2 hours'
           ]);
         }
         
         if (analysis.engagementSignals.viewsToSubscribers?.ratio < 8) {
           issues.push([
-            '🎯 OPPORTUNITY: Low Subscriber Views',
-            `Only ${analysis.engagementSignals.viewsToSubscribers?.ratio?.toFixed(1)}% of subscribers watch new videos`,
-            'HIGH PRIORITY',
-            'Improve video hooks, thumbnails, and posting consistency',
-            'Expected Impact: 2-3x more views from existing subscribers',
-            'Time Required: 30 min per video',
-            '', ''
+            'LOW SUBSCRIBER VIEWS',
+            `Only ${analysis.engagementSignals.viewsToSubscribers?.ratio?.toFixed(1)}% watch new videos`,
+            'HIGH',
+            'Improve hooks & thumbnails',
+            '2-3x more subscriber views',
+            '30 min per video'
           ]);
         }
         
         if (issues.length === 0) {
           issues.push([
-            '✅ No Critical Issues Found!',
-            'Your channel is performing well overall',
-            'MAINTENANCE MODE',
-            'Focus on optimization opportunities and consistency',
-            'Expected Impact: Steady growth',
-            'Time Required: Regular maintenance',
-            '', ''
+            'NO CRITICAL ISSUES',
+            'Channel performing well overall',
+            'GOOD',
+            'Focus on optimization',
+            'Steady growth',
+            'Weekly maintenance'
           ]);
         }
         
         return issues;
       };
 
-      // Create the dashboard data
-      console.log('📊 Building dashboard data structure...');
+      // Create enhanced dashboard data with better spacing and organization
+      console.log('📊 Building professional dashboard data...');
       const values = [
-        // HEADER SECTION
-        ['🎬 YOUTUBE CHANNEL PERFORMANCE DASHBOARD', '', '', '', '', '', '', ''],
-        ['', '', '', '', '', '', '', ''],
-        [`📺 ${analysis.channel.name}`, '', '', '', '', `📅 Generated: ${new Date().toLocaleDateString()}`, '', ''],
-        ['', '', '', '', '', '', '', ''],
+        // MAIN HEADER
+        ['YOUTUBE CHANNEL PERFORMANCE DASHBOARD', '', '', '', '', '', '', '', '', ''],
+        ['', '', '', '', '', '', '', '', '', ''],
         
-        // KEY METRICS OVERVIEW
-        ['📈 CHANNEL OVERVIEW', '', '', '', '', '', '', ''],
-        ['', '', '', '', '', '', '', ''],
-        ['👥 Subscribers', analysis.channel.subscriberCount.toLocaleString(), '', '👁️ Total Views', analysis.channel.totalViews.toLocaleString(), '', '🎥 Total Videos', analysis.channel.videoCount],
-        ['📊 Avg Views/Video', Math.round(analysis.channel.totalViews / analysis.channel.videoCount).toLocaleString(), '', '⏱️ Channel Age', `${Math.floor((Date.now() - new Date(analysis.channel.createdAt)) / (1000 * 60 * 60 * 24 * 365))} years`, '', '🌍 Country', analysis.channel.country || 'Not specified'],
-        ['', '', '', '', '', '', '', ''],
+        // CHANNEL INFO SECTION
+        [analysis.channel.name, '', '', `Analysis Date: ${new Date().toLocaleDateString('en-US', { 
+          year: 'numeric', month: 'long', day: 'numeric' 
+        })}`, '', '', '', '', '', ''],
+        ['', '', '', '', '', '', '', '', '', ''],
         
-        // PERFORMANCE SCORES DASHBOARD
-        ['🏆 PERFORMANCE SCORES DASHBOARD', '', '', '', '', '', '', ''],
-        ['', '', '', '', '', '', '', ''],
-        ['📊 METRIC', '🎯 SCORE', '📈 GRADE', '', '📊 METRIC', '🎯 SCORE', '📈 GRADE', ''],
-        ['🎨 Branding & Identity', getScoreValue(analysis.overallScores.brandingScore), getScoreGradeLocal(analysis.overallScores.brandingScore), '', '🔍 SEO & Metadata', getScoreValue(analysis.overallScores.seoScore), getScoreGradeLocal(analysis.overallScores.seoScore), ''],
-        ['📅 Content Strategy', getScoreValue(analysis.overallScores.contentStrategyScore), getScoreGradeLocal(analysis.overallScores.contentStrategyScore), '', '💬 Engagement Signals', getScoreValue(analysis.overallScores.engagementScore), getScoreGradeLocal(analysis.overallScores.engagementScore), ''],
-        ['🎬 Content Quality', getScoreValue(analysis.overallScores.contentQualityScore), getScoreGradeLocal(analysis.overallScores.contentQualityScore), '', '📚 Playlist Structure', getScoreValue(analysis.overallScores.playlistScore), getScoreGradeLocal(analysis.overallScores.playlistScore), ''],
-        ['', '', '', '', '', '', '', ''],
+        // KEY METRICS GRID
+        ['CHANNEL OVERVIEW', '', '', '', '', '', '', '', '', ''],
+        ['', '', '', '', '', '', '', '', '', ''],
+        ['SUBSCRIBERS', 'TOTAL VIEWS', 'TOTAL VIDEOS', 'AVG VIEWS/VIDEO', 'CHANNEL AGE', '', '', '', '', ''],
+        [
+          analysis.channel.subscriberCount.toLocaleString(),
+          analysis.channel.totalViews.toLocaleString(),
+          analysis.channel.videoCount.toLocaleString(),
+          Math.round(analysis.channel.totalViews / analysis.channel.videoCount).toLocaleString(),
+          `${Math.floor((Date.now() - new Date(analysis.channel.createdAt)) / (1000 * 60 * 60 * 24 * 365))} years`,
+          '', '', '', '', ''
+        ],
+        ['', '', '', '', '', '', '', '', '', ''],
         
-        // CRITICAL ISSUES & OPPORTUNITIES
-        ['🚨 CRITICAL ISSUES & QUICK WINS', '', '', '', '', '', '', ''],
-        ['', '', '', '', '', '', '', ''],
-        ['Issue Type', 'Description', 'Priority Level', 'Recommended Action', 'Expected Impact', 'Time Investment', '', ''],
+        // PERFORMANCE SCORES SECTION
+        ['PERFORMANCE SCORES', '', '', '', '', '', '', '', '', ''],
+        ['', '', '', '', '', '', '', '', '', ''],
+        ['METRIC', 'SCORE', 'GRADE', '', 'METRIC', 'SCORE', 'GRADE', '', '', ''],
+        [
+          'Branding & Identity',
+          getScoreValue(analysis.overallScores.brandingScore),
+          getScoreGradeLocal(analysis.overallScores.brandingScore),
+          '',
+          'SEO & Metadata',
+          getScoreValue(analysis.overallScores.seoScore),
+          getScoreGradeLocal(analysis.overallScores.seoScore),
+          '', '', ''
+        ],
+        [
+          'Content Strategy',
+          getScoreValue(analysis.overallScores.contentStrategyScore),
+          getScoreGradeLocal(analysis.overallScores.contentStrategyScore),
+          '',
+          'Engagement Signals',
+          getScoreValue(analysis.overallScores.engagementScore),
+          getScoreGradeLocal(analysis.overallScores.engagementScore),
+          '', '', ''
+        ],
+        [
+          'Content Quality',
+          getScoreValue(analysis.overallScores.contentQualityScore),
+          getScoreGradeLocal(analysis.overallScores.contentQualityScore),
+          '',
+          'Playlist Structure',
+          getScoreValue(analysis.overallScores.playlistScore),
+          getScoreGradeLocal(analysis.overallScores.playlistScore),
+          '', '', ''
+        ],
+        ['', '', '', '', '', '', '', '', '', ''],
+        
+        // CRITICAL ISSUES SECTION
+        ['CRITICAL ISSUES & OPPORTUNITIES', '', '', '', '', '', '', '', '', ''],
+        ['', '', '', '', '', '', '', '', '', ''],
+        ['ISSUE TYPE', 'DESCRIPTION', 'PRIORITY', 'ACTION NEEDED', 'EXPECTED IMPACT', 'TIME REQUIRED', '', '', '', ''],
         ...getCriticalIssues(),
-        ['', '', '', '', '', '', '', ''],
+        ['', '', '', '', '', '', '', '', '', ''],
         
-        // SEO PERFORMANCE BREAKDOWN
-        ['🔍 SEO PERFORMANCE BREAKDOWN', '', '', '', '', '', '', ''],
-        ['', '', '', '', '', '', '', ''],
-        ['📝 Title Analysis', '', '', '📄 Description Analysis', '', '', '🏷️ Tags Analysis', ''],
-        [`Average Length: ${analysis.seoMetadata.titles.averageLength?.toFixed(0) || 0} chars`, `Optimal Length: ${analysis.seoMetadata.titles.optimalLengthPercentage?.toFixed(0) || 0}%`, `With Numbers: ${analysis.seoMetadata.titles.hasNumbersPercentage?.toFixed(0) || 0}%`, `Average Length: ${analysis.seoMetadata.descriptions.averageLength?.toFixed(0) || 0} chars`, `With Timestamps: ${analysis.seoMetadata.descriptions.hasTimestampsPercentage?.toFixed(0) || 0}%`, `With CTAs: ${analysis.seoMetadata.descriptions.hasCTAPercentage?.toFixed(0) || 0}%`, `Average per Video: ${analysis.seoMetadata.tags.averageTagCount?.toFixed(1) || 0}`, `Videos with NO TAGS: ${analysis.seoMetadata.tags.videosWithNoTagsCount || 0}`],
-        ['', '', '', '', '', '', '', ''],
+        // SEO BREAKDOWN SECTION
+        ['SEO PERFORMANCE BREAKDOWN', '', '', '', '', '', '', '', '', ''],
+        ['', '', '', '', '', '', '', '', '', ''],
+        ['TITLES', '', 'DESCRIPTIONS', '', 'TAGS', '', '', '', '', ''],
+        [
+          `Avg Length: ${Math.round(analysis.seoMetadata.titles.averageLength || 0)} chars`,
+          `Optimal: ${Math.round(analysis.seoMetadata.titles.optimalLengthPercentage || 0)}%`,
+          `Avg Length: ${Math.round(analysis.seoMetadata.descriptions.averageLength || 0)} chars`,
+          `With Timestamps: ${Math.round(analysis.seoMetadata.descriptions.hasTimestampsPercentage || 0)}%`,
+          `Avg per Video: ${(analysis.seoMetadata.tags.averageTagCount || 0).toFixed(1)}`,
+          `Missing Tags: ${analysis.seoMetadata.tags.videosWithNoTagsCount || 0} videos`,
+          '', '', '', ''
+        ],
+        ['', '', '', '', '', '', '', '', '', ''],
         
-        // ENGAGEMENT ANALYSIS
-        ['💬 ENGAGEMENT PERFORMANCE ANALYSIS', '', '', '', '', '', '', ''],
-        ['', '', '', '', '', '', '', ''],
-        ['Views-to-Subscribers Ratio', `${analysis.engagementSignals.viewsToSubscribers?.ratio?.toFixed(1) || 0}%`, analysis.engagementSignals.viewsToSubscribers?.benchmark || 'Needs Analysis', '', 'Like-to-View Ratio', `${analysis.engagementSignals.likeEngagement?.averageRatio?.toFixed(2) || 0}%`, analysis.engagementSignals.likeEngagement?.benchmark || 'Needs Analysis', ''],
-        ['Comment Engagement Score', `${analysis.engagementSignals.commentEngagement?.qualityScore?.toFixed(0) || 0}/100`, analysis.engagementSignals.commentEngagement?.benchmark || 'Needs Analysis', '', 'Engagement Consistency', `${analysis.engagementSignals.consistency?.toFixed(0) || 0}%`, analysis.engagementSignals.consistency >= 70 ? '✅ Consistent' : '⚠️ Inconsistent', ''],
-        ['', '', '', '', '', '', '', ''],
+        // ENGAGEMENT METRICS
+        ['ENGAGEMENT PERFORMANCE', '', '', '', '', '', '', '', '', ''],
+        ['', '', '', '', '', '', '', '', '', ''],
+        ['METRIC', 'VALUE', 'BENCHMARK', '', 'METRIC', 'VALUE', 'BENCHMARK', '', '', ''],
+        [
+          'Views per Subscriber',
+          `${(analysis.engagementSignals.viewsToSubscribers?.ratio || 0).toFixed(1)}%`,
+          analysis.engagementSignals.viewsToSubscribers?.benchmark || 'Analyzing',
+          '',
+          'Like Rate',
+          `${(analysis.engagementSignals.likeEngagement?.averageRatio || 0).toFixed(2)}%`,
+          analysis.engagementSignals.likeEngagement?.benchmark || 'Analyzing',
+          '', '', ''
+        ],
+        ['', '', '', '', '', '', '', '', '', ''],
         
-        // CONTENT THEMES ANALYSIS
-        ['🏷️ CONTENT THEMES & FOCUS ANALYSIS', '', '', '', '', '', '', ''],
-        ['', '', '', '', '', '', '', ''],
-        ...(analysis.contentStrategy.contentThemes.primaryThemes && analysis.contentStrategy.contentThemes.primaryThemes.length > 0 ? [
-          ['Primary Theme', 'Strength Score', 'Video Coverage', 'Content Focus Area', '', '', '', ''],
-          ...analysis.contentStrategy.contentThemes.primaryThemes.slice(0, 5).map(theme => [
-            `🎯 ${theme.theme.charAt(0).toUpperCase() + theme.theme.slice(1)}`,
-            `Strength: ${theme.frequency}`,
-            `${theme.videos_mentioned || Math.round((theme.frequency / analysis.videos.length) * 100)}% of videos`,
-            'Content topic',
-            '', '', '', ''
-          ]),
-          [`📊 Overall Focus: ${analysis.contentStrategy.contentThemes.focusRecommendation}`, '', '', '', '', '', '', '']
-        ] : [
-          ['❌ No Clear Content Themes Identified', '', '', '', '', '', '', ''],
-          ['Recommendation: Focus on 3-5 core topic areas', 'Use consistent keywords in titles', 'Add relevant tags to categorize content', 'Write detailed descriptions with topic mentions', '', '', '', '']
-        ]),
-        ['', '', '', '', '', '', '', ''],
-        
-        // PRIORITY ACTION PLAN
-        ['🎯 PRIORITY ACTION PLAN', '', '', '', '', '', '', ''],
-        ['', '', '', '', '', '', '', ''],
-        ['Priority Level', 'Action Item', 'Expected Impact', 'Time Investment', 'Category', 'Status', '', ''],
-        ...analysis.priorityRecommendations.slice(0, 8).map(rec => [
-          `${rec.priority === 'High' ? '🔥' : rec.priority === 'Medium' ? '⚡' : '💡'} ${rec.priority || 'Medium'}`,
-          rec.action.length > 60 ? rec.action.substring(0, 57) + '...' : rec.action,
-          rec.impact || 'Medium Impact',
-          rec.timeInvestment || '30-60 minutes',
-          rec.category || 'Optimization',
-          '⏳ Pending',
-          '', ''
-        ]),
-        ['', '', '', '', '', '', '', ''],
-        
-        // RECENT VIDEOS PERFORMANCE TABLE
-        ['📹 RECENT VIDEOS PERFORMANCE ANALYSIS', '', '', '', '', '', '', ''],
-        ['', '', '', '', '', '', '', ''],
-        ['Video Title', 'Views', 'Tags', 'SEO Score', 'Top Issue', 'Priority', '', ''],
-        ...analysis.videos.slice(0, 12).map(video => [
-          video.title.length > 35 ? video.title.substring(0, 32) + '...' : video.title,
+        // TOP VIDEOS PERFORMANCE
+        ['RECENT VIDEOS PERFORMANCE', '', '', '', '', '', '', '', '', ''],
+        ['', '', '', '', '', '', '', '', '', ''],
+        ['VIDEO TITLE', 'VIEWS', 'ENGAGEMENT', 'TAGS', 'TITLE SCORE', 'TOP ISSUE', '', '', '', ''],
+        ...analysis.videos.slice(0, 8).map(video => [
+          video.title.length > 40 ? video.title.substring(0, 37) + '...' : video.title,
           video.views.toLocaleString(),
+          `${video.engagementRate.toFixed(1)}%`,
           `${video.tags?.length || 0} tags`,
-          `${video.titleAnalysis?.score?.toFixed(0) || 'N/A'}/100`,
-          getTopIssue(video),
-          (!video.tags || video.tags.length === 0) ? '🔥 HIGH' : video.title.length < 30 ? '⚡ MED' : '💡 LOW',
-          '', ''
+          `${Math.round(video.titleAnalysis?.score || 0)}/100`,
+          (!video.tags || video.tags.length === 0) ? 'NO TAGS' : 
+           video.title.length < 30 ? 'SHORT TITLE' : 'GOOD',
+          '', '', '', ''
         ]),
-        ['', '', '', '', '', '', '', ''],
+        ['', '', '', '', '', '', '', '', '', ''],
         
-        // SUMMARY & NEXT STEPS
-        ['📋 EXECUTIVE SUMMARY & NEXT STEPS', '', '', '', '', '', '', ''],
-        ['', '', '', '', '', '', '', ''],
-        ['Overall Channel Health', analysis.overallScores.seoScore >= 70 ? '✅ HEALTHY' : analysis.overallScores.seoScore >= 50 ? '⚠️ NEEDS ATTENTION' : '🚨 REQUIRES IMMEDIATE ACTION', '', 'Primary Focus Area', analysis.seoMetadata.tags.videosWithNoTagsCount > 0 ? 'Fix Missing Tags' : analysis.seoMetadata.titles.optimalLengthPercentage < 50 ? 'Optimize Titles' : 'Maintain & Optimize', '', 'Estimated Time to Improve', analysis.seoMetadata.tags.videosWithNoTagsCount > 0 ? '2-3 hours' : '1-2 hours per week', ''],
-        ['Quick Win Impact', 'High - Immediate discoverability boost', '', 'Long-term Strategy', 'Consistent optimization and content quality focus', '', 'Success Metrics', 'Track SEO scores, engagement rates, and subscriber growth', ''],
-        ['', '', '', '', '', '', '', ''],
+        // ACTION PLAN
+        ['PRIORITY ACTION PLAN', '', '', '', '', '', '', '', '', ''],
+        ['', '', '', '', '', '', '', '', '', ''],
+        ['PRIORITY', 'ACTION ITEM', 'IMPACT', 'TIME', 'STATUS', '', '', '', '', ''],
+        ...analysis.priorityRecommendations.slice(0, 6).map(rec => [
+          rec.priority?.toUpperCase() || 'MEDIUM',
+          rec.action?.length > 50 ? rec.action.substring(0, 47) + '...' : rec.action,
+          rec.impact || 'Medium Impact',
+          rec.timeInvestment || '30-60 min',
+          'PENDING',
+          '', '', '', '', ''
+        ]),
+        ['', '', '', '', '', '', '', '', '', ''],
         
-        // ANALYSIS METADATA
-        ['📊 ANALYSIS METADATA', '', '', '', '', '', '', ''],
-        ['Analysis Date', new Date(analysis.analysisDate || Date.now()).toLocaleDateString(), '', 'Videos Analyzed', analysis.videos.length, '', 'Analysis Version', '3.0 Enhanced Dashboard', ''],
-        ['Data Sources', 'YouTube Data API v3', '', 'Coverage', 'Comprehensive Multi-Factor Analysis', '', 'Next Review', 'Recommended in 30 days', '']
+        // SUMMARY
+        ['EXECUTIVE SUMMARY', '', '', '', '', '', '', '', '', ''],
+        ['', '', '', '', '', '', '', '', '', ''],
+        [
+          'Overall Health:',
+          analysis.overallScores.seoScore >= 70 ? 'HEALTHY' : 
+          analysis.overallScores.seoScore >= 50 ? 'NEEDS ATTENTION' : 'CRITICAL',
+          '',
+          'Primary Focus:',
+          analysis.seoMetadata.tags.videosWithNoTagsCount > 0 ? 'Fix Missing Tags' : 
+          'Optimize Titles & Descriptions',
+          '',
+          'Est. Time to Improve:',
+          analysis.seoMetadata.tags.videosWithNoTagsCount > 0 ? '2-3 hours' : '1-2 hours/week',
+          '', ''
+        ]
       ];
 
-      // Write the data to sheets
-      console.log('💾 Writing dashboard data to Google Sheets...');
+      // Write data to sheets
+      console.log('💾 Writing enhanced data to Google Sheets...');
       await this.sheets.spreadsheets.values.update({
         spreadsheetId: sheetId,
         range: 'A1',
@@ -448,11 +502,11 @@ class YouTubeChannelAnalyzer {
       });
 
       // Apply enhanced formatting
-      console.log('🎨 Applying dashboard formatting...');
-      await this.applyEnhancedFormattingSafe(sheetId, analysis);
+      console.log('🎨 Applying professional formatting...');
+      await this.applyProfessionalFormatting(sheetId, analysis);
 
-      console.log('✅ Beautiful dashboard created successfully in Google Sheets!');
-      console.log(`🔗 View your dashboard: https://docs.google.com/spreadsheets/d/${sheetId}`);
+      console.log('✅ Professional dashboard created successfully!');
+      console.log(`🔗 View your enhanced dashboard: https://docs.google.com/spreadsheets/d/${sheetId}`);
       
     } catch (error) {
       console.error('❌ Error creating enhanced dashboard:', error.message);
@@ -494,99 +548,293 @@ class YouTubeChannelAnalyzer {
     }
   }
 
-  async applyEnhancedFormattingSafe(sheetId, analysis) {
+  async applyProfessionalFormatting(sheetId, analysis) {
     try {
       const requests = [
-        // Header styling
+        // Set column widths for better readability
+        {
+          updateDimensionProperties: {
+            range: { sheetId: 0, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 },
+            properties: { pixelSize: 200 },
+            fields: 'pixelSize'
+          }
+        },
+        {
+          updateDimensionProperties: {
+            range: { sheetId: 0, dimension: 'COLUMNS', startIndex: 1, endIndex: 3 },
+            properties: { pixelSize: 120 },
+            fields: 'pixelSize'
+          }
+        },
+        {
+          updateDimensionProperties: {
+            range: { sheetId: 0, dimension: 'COLUMNS', startIndex: 3, endIndex: 10 },
+            properties: { pixelSize: 140 },
+            fields: 'pixelSize'
+          }
+        },
+
+        // Main header - Premium look
         {
           repeatCell: {
-            range: { sheetId: 0, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 8 },
+            range: { sheetId: 0, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 10 },
             cell: {
               userEnteredFormat: {
-                backgroundColor: { red: 0.15, green: 0.33, blue: 0.75 },
+                backgroundColor: { red: 0.1, green: 0.1, blue: 0.3 },
                 textFormat: { 
                   foregroundColor: { red: 1, green: 1, blue: 1 }, 
-                  fontSize: 16, 
-                  bold: true 
+                  fontSize: 18, 
+                  bold: true,
+                  fontFamily: 'Arial'
                 },
                 horizontalAlignment: 'CENTER',
+                verticalAlignment: 'MIDDLE',
+                borders: {
+                  bottom: { style: 'SOLID', width: 3, color: { red: 0.2, green: 0.4, blue: 0.8 }}
+                }
+              }
+            },
+            fields: 'userEnteredFormat'
+          }
+        },
+        {
+          mergeCells: {
+            range: { sheetId: 0, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 10 },
+            mergeType: 'MERGE_ALL'
+          }
+        },
+
+        // Channel name row
+        {
+          repeatCell: {
+            range: { sheetId: 0, startRowIndex: 2, endRowIndex: 3, startColumnIndex: 0, endColumnIndex: 10 },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 0.95, green: 0.95, blue: 0.98 },
+                textFormat: { 
+                  fontSize: 14, 
+                  bold: true,
+                  fontFamily: 'Arial'
+                },
+                horizontalAlignment: 'LEFT',
                 verticalAlignment: 'MIDDLE'
               }
             },
             fields: 'userEnteredFormat'
           }
         },
-        // Merge header
-        {
-          mergeCells: {
-            range: { sheetId: 0, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 8 },
-            mergeType: 'MERGE_ALL'
-          }
-        },
-        // Section headers styling
+
+        // Section headers - Modern blue gradient
         {
           repeatCell: {
-            range: { sheetId: 0, startRowIndex: 4, endRowIndex: 5, startColumnIndex: 0, endColumnIndex: 8 },
+            range: { sheetId: 0, startRowIndex: 4, endRowIndex: 5, startColumnIndex: 0, endColumnIndex: 10 },
             cell: {
               userEnteredFormat: {
-                backgroundColor: { red: 0.2, green: 0.6, blue: 0.2 },
+                backgroundColor: { red: 0.2, green: 0.4, blue: 0.8 },
                 textFormat: { 
                   foregroundColor: { red: 1, green: 1, blue: 1 }, 
+                  fontSize: 13, 
+                  bold: true,
+                  fontFamily: 'Arial'
+                },
+                horizontalAlignment: 'LEFT',
+                verticalAlignment: 'MIDDLE'
+              }
+            },
+            fields: 'userEnteredFormat'
+          }
+        },
+
+        // Metrics values row - Clean white with borders
+        {
+          repeatCell: {
+            range: { sheetId: 0, startRowIndex: 7, endRowIndex: 8, startColumnIndex: 0, endColumnIndex: 10 },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 1, green: 1, blue: 1 },
+                textFormat: { 
                   fontSize: 12, 
-                  bold: true 
+                  bold: true,
+                  fontFamily: 'Arial'
+                },
+                horizontalAlignment: 'CENTER',
+                verticalAlignment: 'MIDDLE',
+                borders: {
+                  top: { style: 'SOLID', width: 1, color: { red: 0.8, green: 0.8, blue: 0.8 }},
+                  bottom: { style: 'SOLID', width: 1, color: { red: 0.8, green: 0.8, blue: 0.8 }},
+                  left: { style: 'SOLID', width: 1, color: { red: 0.8, green: 0.8, blue: 0.8 }},
+                  right: { style: 'SOLID', width: 1, color: { red: 0.8, green: 0.8, blue: 0.8 }}
                 }
               }
             },
             fields: 'userEnteredFormat'
           }
         },
-        // Performance scores section
+
+        // Performance scores section header
         {
           repeatCell: {
-            range: { sheetId: 0, startRowIndex: 9, endRowIndex: 10, startColumnIndex: 0, endColumnIndex: 8 },
+            range: { sheetId: 0, startRowIndex: 10, endRowIndex: 11, startColumnIndex: 0, endColumnIndex: 10 },
             cell: {
               userEnteredFormat: {
-                backgroundColor: { red: 0.9, green: 0.5, blue: 0.1 },
+                backgroundColor: { red: 0.3, green: 0.6, blue: 0.3 },
                 textFormat: { 
                   foregroundColor: { red: 1, green: 1, blue: 1 }, 
-                  fontSize: 12, 
-                  bold: true 
-                }
+                  fontSize: 13, 
+                  bold: true,
+                  fontFamily: 'Arial'
+                },
+                horizontalAlignment: 'LEFT',
+                verticalAlignment: 'MIDDLE'
               }
             },
             fields: 'userEnteredFormat'
           }
         },
-        // Auto-resize all columns
+
+        // Critical issues section header
         {
-          autoResizeDimensions: {
-            dimensions: {
-              sheetId: 0,
-              dimension: 'COLUMNS',
-              startIndex: 0,
-              endIndex: 8
-            }
+          repeatCell: {
+            range: { sheetId: 0, startRowIndex: 17, endRowIndex: 18, startColumnIndex: 0, endColumnIndex: 10 },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 0.8, green: 0.3, blue: 0.3 },
+                textFormat: { 
+                  foregroundColor: { red: 1, green: 1, blue: 1 }, 
+                  fontSize: 13, 
+                  bold: true,
+                  fontFamily: 'Arial'
+                },
+                horizontalAlignment: 'LEFT',
+                verticalAlignment: 'MIDDLE'
+              }
+            },
+            fields: 'userEnteredFormat'
+          }
+        },
+
+        // Other section headers with alternating colors
+        {
+          repeatCell: {
+            range: { sheetId: 0, startRowIndex: 23, endRowIndex: 24, startColumnIndex: 0, endColumnIndex: 10 },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 0.5, green: 0.3, blue: 0.8 },
+                textFormat: { 
+                  foregroundColor: { red: 1, green: 1, blue: 1 }, 
+                  fontSize: 13, 
+                  bold: true,
+                  fontFamily: 'Arial'
+                },
+                horizontalAlignment: 'LEFT',
+                verticalAlignment: 'MIDDLE'
+              }
+            },
+            fields: 'userEnteredFormat'
+          }
+        },
+
+        // Table headers styling
+        {
+          repeatCell: {
+            range: { sheetId: 0, startRowIndex: 12, endRowIndex: 13, startColumnIndex: 0, endColumnIndex: 10 },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 0.9, green: 0.9, blue: 0.9 },
+                textFormat: { 
+                  fontSize: 11, 
+                  bold: true,
+                  fontFamily: 'Arial'
+                },
+                horizontalAlignment: 'CENTER',
+                verticalAlignment: 'MIDDLE',
+                borders: {
+                  bottom: { style: 'SOLID', width: 2, color: { red: 0.6, green: 0.6, blue: 0.6 }}
+                }
+              }
+            },
+            fields: 'userEnteredFormat'
           }
         }
       ];
 
-      // Apply formatting in smaller batches to avoid API limits
-      const batchSize = 3;
-      for (let i = 0; i < requests.length; i += batchSize) {
-        const batch = requests.slice(i, i + batchSize);
+      // Apply conditional formatting for scores
+      const scoreConditions = [
+        {
+          addConditionalFormatRule: {
+            rule: {
+              ranges: [{ sheetId: 0, startRowIndex: 13, endRowIndex: 16, startColumnIndex: 1, endColumnIndex: 2 }],
+              booleanRule: {
+                condition: {
+                  type: 'NUMBER_GREATER_THAN_EQ',
+                  values: [{ userEnteredValue: '90' }]
+                },
+                format: {
+                  backgroundColor: { red: 0.2, green: 0.7, blue: 0.3 },
+                  textFormat: { foregroundColor: { red: 1, green: 1, blue: 1 }, bold: true }
+                }
+              }
+            },
+            index: 0
+          }
+        },
+        {
+          addConditionalFormatRule: {
+            rule: {
+              ranges: [{ sheetId: 0, startRowIndex: 13, endRowIndex: 16, startColumnIndex: 1, endColumnIndex: 2 }],
+              booleanRule: {
+                condition: {
+                  type: 'NUMBER_BETWEEN',
+                  values: [{ userEnteredValue: '70' }, { userEnteredValue: '89' }]
+                },
+                format: {
+                  backgroundColor: { red: 0.9, green: 0.9, blue: 0.3 },
+                  textFormat: { bold: true }
+                }
+              }
+            },
+            index: 1
+          }
+        },
+        {
+          addConditionalFormatRule: {
+            rule: {
+              ranges: [{ sheetId: 0, startRowIndex: 13, endRowIndex: 16, startColumnIndex: 1, endColumnIndex: 2 }],
+              booleanRule: {
+                condition: {
+                  type: 'NUMBER_LESS_THAN',
+                  values: [{ userEnteredValue: '70' }]
+                },
+                format: {
+                  backgroundColor: { red: 0.9, green: 0.3, blue: 0.3 },
+                  textFormat: { foregroundColor: { red: 1, green: 1, blue: 1 }, bold: true }
+                }
+              }
+            },
+            index: 2
+          }
+        }
+      ];
+
+      // Apply all formatting in batches
+      const allRequests = [...requests, ...scoreConditions];
+      const batchSize = 5;
+      
+      for (let i = 0; i < allRequests.length; i += batchSize) {
+        const batch = allRequests.slice(i, i + batchSize);
         await this.sheets.spreadsheets.batchUpdate({
           spreadsheetId: sheetId,
           requestBody: { requests: batch }
         });
         
-        // Small delay to avoid rate limits
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Prevent rate limiting
+        await new Promise(resolve => setTimeout(resolve, 200));
       }
       
-      console.log('🎨 Dashboard formatting applied successfully');
+      console.log('🎨 Professional formatting applied successfully!');
+      
     } catch (formatError) {
-      console.log('⚠️ Basic formatting failed, but data is available:', formatError.message);
-      // Don't throw error - data is more important than formatting
+      console.log('⚠️ Some formatting failed, but data is available:', formatError.message);
     }
   }
 
@@ -1072,7 +1320,7 @@ async function main() {
   
   try {
     await analyzer.analyzeChannel(channelUrl);
-    console.log('🎉 Analysis completed successfully with enhanced dashboard!');
+    console.log('🎉 Analysis completed successfully with professional dashboard!');
   } catch (error) {
     console.error('💥 Analysis failed:', error.message);
     process.exit(1);
