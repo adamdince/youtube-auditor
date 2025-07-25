@@ -116,6 +116,19 @@ class YouTubeChannelAnalyzer {
         id: videoIds
       });
       videoStats = statsResponse.data.items || [];
+      
+      // DEBUG: Log to see what we're getting for tags
+      console.log('🏷️ Checking tags for first video...');
+      if (videoStats.length > 0) {
+        const firstVideo = videoStats[0];
+        console.log(`Video: ${firstVideo.snippet?.title}`);
+        console.log(`Tags found: ${firstVideo.snippet?.tags?.length || 0}`);
+        if (firstVideo.snippet?.tags?.length > 0) {
+          console.log(`Sample tags: ${firstVideo.snippet.tags.slice(0, 3).join(', ')}`);
+        } else {
+          console.log('No tags in snippet:', Object.keys(firstVideo.snippet || {}));
+        }
+      }
     }
 
     const playlistsResponse = await this.youtube.playlists.list({
@@ -797,7 +810,7 @@ class YouTubeChannelAnalyzer {
     const brandingSettings = channel.brandingSettings || {};
     
     const subscriberCount = parseInt(stats.subscriberCount) || 0;
-    const totalViews = parseInt(stats.totalViews) || 0;
+    const totalViews = parseInt(stats.viewCount) || 0; // FIXED: was stats.totalViews
     const videoCount = parseInt(stats.videoCount) || 0;
     
     const videoAnalysis = videos.map(video => this.analyzeVideoComprehensive(video, transcripts));
@@ -2693,7 +2706,8 @@ class YouTubeChannelAnalyzer {
       ...analysisResults.seo.recommendations,
       ...analysisResults.engagement.recommendations,
       ...analysisResults.quality.recommendations,
-      ...analysisResults.playlists.recommendations
+      ...analysisResults.playlists.recommendations,
+      ...(analysisResults.transcripts?.recommendations || []) // NEW: Include transcript recommendations
     ];
     
     const priorityOrder = { 'High': 3, 'Medium': 2, 'Low': 1 };
@@ -2776,6 +2790,15 @@ class YouTubeChannelAnalyzer {
     if (!video.description || video.description.length < 100) issues.push('POOR DESC');
     if (video.titleAnalysis?.score < 50) issues.push('WEAK HOOK');
     
+    // NEW: Transcript-related issues
+    if (video.transcriptAnalysis?.available) {
+      if (video.transcriptAnalysis.hookAnalysis?.score < 50) issues.push('WEAK OPENING');
+      if (video.transcriptAnalysis.speechAnalysis?.fillerRate > 3) issues.push('HIGH FILLERS');
+      if (video.transcriptAnalysis.contentDelivery?.deliveryRate < 60) issues.push('POOR DELIVERY');
+    } else {
+      issues.push('NO TRANSCRIPT');
+    }
+    
     return issues.length > 0 ? issues.join(', ') : '✅ Good';
   }
 
@@ -2819,6 +2842,9 @@ class YouTubeChannelAnalyzer {
         ['Content Quality', `${analysis.overallScores.contentQualityScore.toFixed(1)}/100`, this.getScoreGrade(analysis.overallScores.contentQualityScore), '', ''],
         ['  ↳ Weakest Area:', analysis.contentQuality.scoreExplanation?.weakestArea || 'Multiple areas', '', '', ''],
         ['Playlist Structure', `${analysis.overallScores.playlistScore.toFixed(1)}/100`, this.getScoreGrade(analysis.overallScores.playlistScore), '', ''],
+        ['Transcript Analysis', `${analysis.overallScores.transcriptScore?.toFixed(1) || 'N/A'}/100`, 
+          analysis.overallScores.transcriptScore ? this.getScoreGrade(analysis.overallScores.transcriptScore) : 'No transcripts', '', ''],
+        ['  ↳ Coverage:', `${analysis.transcriptAnalysis?.transcriptsAvailable || 0}/${analysis.videos.length} videos`, '', '', ''],
         ['', '', '', '', ''],
         
         ['🔍 DETAILED SEO ANALYSIS & INSIGHTS', '', '', '', ''],
@@ -2832,6 +2858,72 @@ class YouTubeChannelAnalyzer {
         ...analysis.seoMetadata.detailedInsights?.filter(insight => insight.severity === 'Critical').map(insight => [
           `${insight.category}:`, insight.finding, '', '', ''
         ]) || [],
+        ['', '', '', '', ''],
+        
+        // NEW: TRANSCRIPT ANALYSIS SECTION
+        ['📝 DETAILED TRANSCRIPT ANALYSIS', '', '', '', ''],
+        ['Transcript Coverage', `${analysis.transcriptAnalysis?.transcriptsAvailable || 0} out of ${analysis.videos.length} videos`, 
+          `${analysis.transcriptAnalysis?.coveragePercentage || 0}%`, '', ''],
+        ['Overall Transcript Score', `${analysis.transcriptAnalysis?.overallScore?.toFixed(1) || 'N/A'}/100`, 
+          analysis.transcriptAnalysis?.overallScore ? this.getScoreGrade(analysis.transcriptAnalysis.overallScore) : 'N/A', '', ''],
+        ['', '', '', '', ''],
+        
+        ...(analysis.transcriptAnalysis?.transcriptsAvailable > 0 ? [
+          ['📊 TRANSCRIPT PERFORMANCE BREAKDOWN:', '', '', '', ''],
+          ['Hook Effectiveness', `${analysis.transcriptAnalysis.avgHookScore?.toFixed(1) || 'N/A'}/100`, '', '', ''],
+          ['Speech Quality', `${analysis.transcriptAnalysis.avgSpeechScore?.toFixed(1) || 'N/A'}/100`, '', '', ''],
+          ['Content Delivery', `${analysis.transcriptAnalysis.avgDeliveryScore?.toFixed(1) || 'N/A'}/100`, '', '', ''],
+          ['Video Structure', `${analysis.transcriptAnalysis.avgStructureScore?.toFixed(1) || 'N/A'}/100`, '', '', ''],
+          ['Content Density', `${analysis.transcriptAnalysis.avgDensityScore?.toFixed(1) || 'N/A'}/100`, '', '', ''],
+          ['', '', '', '', ''],
+          
+          ['🎤 SPEECH PATTERN ANALYSIS:', '', '', '', ''],
+          ['Average Speaking Pace', `${Math.round(analysis.transcriptAnalysis.speechPatterns?.avgWordsPerMinute || 0)} WPM`, 
+            'Ideal: 130-170 WPM', '', ''],
+          ['Average Filler Word Rate', `${analysis.transcriptAnalysis.speechPatterns?.avgFillerRate?.toFixed(1) || 0}%`, 
+            'Target: <2%', '', ''],
+          ['Speaking Consistency', `${analysis.transcriptAnalysis.speechPatterns?.consistentPace?.toFixed(1) || 0}%`, 
+            'Target: 80%+', '', ''],
+          ['', '', '', '', ''],
+          
+          ['💬 CONTENT DELIVERY INSIGHTS:', '', '', '', ''],
+          ['Promise Delivery Rate', `${analysis.transcriptAnalysis.contentDeliveryPatterns?.avgDeliveryRate?.toFixed(1) || 0}%`, 
+            'Target: 80%+', '', ''],
+          ['Delivery Consistency', `${analysis.transcriptAnalysis.contentDeliveryPatterns?.consistentDelivery?.toFixed(1) || 0}%`, 
+            'Target: 80%+', '', ''],
+          ['', '', '', '', ''],
+          
+          ['🔍 KEY TRANSCRIPT INSIGHTS:', '', '', '', ''],
+          ...analysis.transcriptAnalysis.insights?.map(insight => [
+            '  • ' + insight, '', '', '', ''
+          ]) || [],
+          ['', '', '', '', ''],
+          
+          ['💡 TRANSCRIPT-BASED RECOMMENDATIONS:', '', '', '', ''],
+          ['Priority', 'Recommendation', 'Expected Impact', 'Focus Area', ''],
+          ...analysis.transcriptAnalysis.recommendations?.map(rec => [
+            rec.priority || 'Medium',
+            rec.action,
+            rec.impact || 'Improved video quality',
+            rec.category,
+            ''
+          ]) || []
+        ] : [
+          ['❌ NO TRANSCRIPTS AVAILABLE FOR ANALYSIS', '', '', '', ''],
+          ['Status:', 'Cannot analyze video content - no transcripts found', '', '', ''],
+          ['Possible Reasons:', '', '', '', ''],
+          ['  • Auto-generated captions disabled', '', '', '', ''],
+          ['  • Videos too new (captions not processed yet)', '', '', '', ''],
+          ['  • Audio quality too poor for auto-captions', '', '', '', ''],
+          ['  • Manual captions not uploaded', '', '', '', ''],
+          ['', '', '', '', ''],
+          ['🚀 HOW TO ENABLE TRANSCRIPT ANALYSIS:', '', '', '', ''],
+          ['1. Enable auto-generated captions in YouTube Studio', '', '', '', ''],
+          ['2. Upload manual caption files for better accuracy', '', '', '', ''],
+          ['3. Ensure good audio quality in recordings', '', '', '', ''],
+          ['4. Wait 24-48 hours for auto-captions to process', '', '', '', ''],
+          ['5. Re-run analysis after captions are available', '', '', '', '']
+        ]),
         ['', '', '', '', ''],
         
         ['⚠️ HIGH PRIORITY SEO ISSUES:', '', '', '', ''],
@@ -2971,14 +3063,16 @@ class YouTubeChannelAnalyzer {
             `${(75 - analysis.contentQuality.overallScore).toFixed(1)} points below benchmark` : 'Meeting benchmark'],
         ['', '', '', '', ''],
         
-        ['📹 DETAILED VIDEO ANALYSIS WITH INSIGHTS (Recent 15 Videos)', '', '', '', ''],
-        ['Title', 'Views', 'Tags Count', 'Title Length', 'Hook Score', 'Issues Found'],
+        ['📹 DETAILED VIDEO ANALYSIS WITH INSIGHTS (Recent 15 Videos)', '', '', '', '', ''],
+        ['Title', 'Views', 'Tags Count', 'Title Length', 'Hook Score', 'Transcript', 'Issues Found'],
         ...analysis.videos.slice(0, 15).map(video => [
-          video.title.length > 40 ? video.title.substring(0, 37) + '...' : video.title,
+          video.title.length > 35 ? video.title.substring(0, 32) + '...' : video.title,
           video.views.toLocaleString(),
           video.tags?.length || 0,
           video.title.length,
           video.titleAnalysis?.score?.toFixed(0) || 'N/A',
+          video.transcriptAnalysis?.available ? 
+            `✅ ${video.transcriptAnalysis.overallScore?.toFixed(0) || 'N/A'}/100` : '❌ None',
           this.identifyVideoIssues(video)
         ]),
         ['', '', '', '', ''],
