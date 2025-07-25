@@ -118,16 +118,32 @@ class YouTubeChannelAnalyzer {
       videoStats = statsResponse.data.items || [];
       
       // DEBUG: Log to see what we're getting for tags
-      console.log('🏷️ Checking tags for first video...');
+      console.log('🏷️ Analyzing tags across video types...');
+      let shortsCount = 0;
+      let regularCount = 0;
+      let shortsWithTags = 0;
+      let regularWithTags = 0;
+      
       if (videoStats.length > 0) {
-        const firstVideo = videoStats[0];
-        console.log(`Video: ${firstVideo.snippet?.title}`);
-        console.log(`Tags found: ${firstVideo.snippet?.tags?.length || 0}`);
-        if (firstVideo.snippet?.tags?.length > 0) {
-          console.log(`Sample tags: ${firstVideo.snippet.tags.slice(0, 3).join(', ')}`);
-        } else {
-          console.log('No tags in snippet:', Object.keys(firstVideo.snippet || {}));
-        }
+        videoStats.forEach((video, index) => {
+          const duration = this.parseDuration(video.contentDetails?.duration);
+          const isShort = duration < 60;
+          const tagCount = video.snippet?.tags?.length || 0;
+          
+          if (isShort) {
+            shortsCount++;
+            if (tagCount > 0) shortsWithTags++;
+          } else {
+            regularCount++;
+            if (tagCount > 0) regularWithTags++;
+          }
+          
+          if (index < 3) { // Log first 3 videos
+            console.log(`${isShort ? '📱 SHORT' : '🎥 REGULAR'}: "${video.snippet?.title?.substring(0, 30)}..." - ${tagCount} tags`);
+          }
+        });
+        
+        console.log(`📊 Summary: ${shortsCount} Shorts (${shortsWithTags} with tags), ${regularCount} Regular (${regularWithTags} with tags)`);
       }
     }
 
@@ -880,7 +896,27 @@ class YouTubeChannelAnalyzer {
     
     const title = snippet.title;
     const description = snippet.description || '';
-    const tags = snippet.tags || [];
+    
+    // IMPROVED: More robust tag extraction with debugging
+    let tags = [];
+    if (snippet.tags && Array.isArray(snippet.tags)) {
+      tags = snippet.tags;
+    } else if (snippet.tags) {
+      // Sometimes tags might be a string or other format
+      console.log(`⚠️ Unexpected tags format for "${title}":`, typeof snippet.tags, snippet.tags);
+      tags = Array.isArray(snippet.tags) ? snippet.tags : [];
+    } else {
+      // No tags found
+      tags = [];
+    }
+    
+    // DEBUG: Log tag info for videos
+    if (tags.length > 0) {
+      console.log(`✅ Found ${tags.length} tags for: ${title.substring(0, 30)}...`);
+    } else {
+      console.log(`❌ No tags for: ${title.substring(0, 30)}...`);
+    }
+    
     const duration = this.parseDuration(contentDetails?.duration);
     
     // NEW: Transcript analysis for this video
@@ -1881,17 +1917,25 @@ class YouTubeChannelAnalyzer {
     let themeSource = '';
     let analysisDetails = {};
     
+    // Separate Shorts from regular videos for different analysis approaches
+    const shorts = videos.filter(v => v.duration < 60);
+    const regularVideos = videos.filter(v => v.duration >= 60);
+    
+    console.log(`🎬 Content analysis: ${shorts.length} Shorts, ${regularVideos.length} regular videos`);
+    
     // Comprehensive content analysis from titles, descriptions, and tags
     const contentText = videos.map(video => {
       const title = video.title || '';
       const description = video.description || '';
       const tags = (video.tags || []).join(' ');
+      const isShort = video.duration < 60;
       
       return {
         title: title.toLowerCase(),
         description: description.toLowerCase().substring(0, 500), // First 500 chars of description
         tags: tags.toLowerCase(),
-        combined: `${title} ${description} ${tags}`.toLowerCase()
+        combined: `${title} ${description} ${tags}`.toLowerCase(),
+        isShort: isShort
       };
     });
     
@@ -1905,7 +1949,11 @@ class YouTubeChannelAnalyzer {
         titlesAnalyzed: videos.length,
         descriptionsAnalyzed: videos.filter(v => v.description && v.description.length > 50).length,
         tagsAnalyzed: videos.filter(v => v.tags && v.tags.length > 0).length,
-        totalKeywordsFound: themeKeywords.length
+        totalKeywordsFound: themeKeywords.length,
+        shortsCount: shorts.length,
+        regularVideosCount: regularVideos.length,
+        shortsWithTags: shorts.filter(v => v.tags && v.tags.length > 0).length,
+        regularWithTags: regularVideos.filter(v => v.tags && v.tags.length > 0).length
       };
     } else {
       // Fallback: just common title words
@@ -1930,6 +1978,13 @@ class YouTubeChannelAnalyzer {
         .sort(([,a], [,b]) => b - a)
         .slice(0, 8)
         .map(([word, count]) => ({ theme: word, frequency: count }));
+        
+      analysisDetails = {
+        shortsCount: shorts.length,
+        regularVideosCount: regularVideos.length,
+        shortsWithTags: shorts.filter(v => v.tags && v.tags.length > 0).length,
+        regularWithTags: regularVideos.filter(v => v.tags && v.tags.length > 0).length
+      };
     }
     
     const clarityScore = topThemes.length >= 3 ? 85 : topThemes.length >= 1 ? 60 : 30;
@@ -3080,10 +3135,14 @@ class YouTubeChannelAnalyzer {
         ['🏷️ CONTENT THEMES BREAKDOWN', '', '', '', ''],
         ['Analysis Type:', analysis.contentStrategy.contentThemes.themeSource === 'comprehensive' ? 
           'Comprehensive (titles + descriptions + tags)' : 'Basic (titles only)', '', '', ''],
+        ['Content Mix:', `${analysis.contentStrategy.contentThemes.analysisDetails?.shortsCount || 0} Shorts, ${analysis.contentStrategy.contentThemes.analysisDetails?.regularVideosCount || 0} Regular videos`, '', '', ''],
+        ['', '', '', '', ''],
         ['Content Sources Analyzed:', '', '', '', ''],
         ['  • Video Titles:', analysis.contentStrategy.contentThemes.analysisDetails?.titlesAnalyzed || analysis.videos.length, '', '', ''],
         ['  • Descriptions with Content:', analysis.contentStrategy.contentThemes.analysisDetails?.descriptionsAnalyzed || 'N/A', '', '', ''],
         ['  • Videos with Tags:', analysis.contentStrategy.contentThemes.analysisDetails?.tagsAnalyzed || 'N/A', '', '', ''],
+        ['  • Shorts with Tags:', `${analysis.contentStrategy.contentThemes.analysisDetails?.shortsWithTags || 0}/${analysis.contentStrategy.contentThemes.analysisDetails?.shortsCount || 0}`, '', '', ''],
+        ['  • Regular Videos with Tags:', `${analysis.contentStrategy.contentThemes.analysisDetails?.regularWithTags || 0}/${analysis.contentStrategy.contentThemes.analysisDetails?.regularVideosCount || 0}`, '', '', ''],
         ['', '', '', '', ''],
         ...(analysis.contentStrategy.contentThemes.primaryThemes.length > 0 ? [
           ['Primary Content Themes:', '', '', '', ''],
