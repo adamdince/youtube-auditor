@@ -897,24 +897,19 @@ class YouTubeChannelAnalyzer {
     const title = snippet.title;
     const description = snippet.description || '';
     
-    // IMPROVED: More robust tag extraction with debugging
+    // FIXED: More robust tag extraction
     let tags = [];
-    if (snippet.tags && Array.isArray(snippet.tags)) {
-      tags = snippet.tags;
-    } else if (snippet.tags) {
-      // Sometimes tags might be a string or other format
-      console.log(`⚠️ Unexpected tags format for "${title}":`, typeof snippet.tags, snippet.tags);
-      tags = Array.isArray(snippet.tags) ? snippet.tags : [];
+    if (snippet && snippet.tags) {
+      if (Array.isArray(snippet.tags)) {
+        tags = snippet.tags;
+        console.log(`✅ Extracted ${tags.length} tags from: ${title.substring(0, 30)}...`);
+      } else {
+        console.log(`⚠️ Tags not an array for: ${title.substring(0, 30)}...`, typeof snippet.tags);
+        tags = [];
+      }
     } else {
-      // No tags found
+      console.log(`❌ No tags found for: ${title.substring(0, 30)}...`);
       tags = [];
-    }
-    
-    // DEBUG: Log tag info for videos
-    if (tags.length > 0) {
-      console.log(`✅ Found ${tags.length} tags for: ${title.substring(0, 30)}...`);
-    } else {
-      console.log(`❌ No tags for: ${title.substring(0, 30)}...`);
     }
     
     const duration = this.parseDuration(contentDetails?.duration);
@@ -927,7 +922,7 @@ class YouTubeChannelAnalyzer {
       id: video.id,
       title,
       description,
-      tags,
+      tags, // This should now correctly contain the tags array
       views,
       likes,
       comments,
