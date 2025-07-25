@@ -1,4 +1,4 @@
-// src/analyze.js - Main YouTube Channel Analyzer
+// src/analyze.js - Conservative YouTube Channel Analyzer with Factual Insights
 const { google } = require('googleapis');
 const fs = require('fs').promises;
 
@@ -30,22 +30,15 @@ class YouTubeChannelAnalyzer {
     try {
       console.log(`🚀 Starting analysis for: ${channelUrl}`);
       
-      // Extract channel ID
       const channelId = this.extractChannelId(channelUrl);
       if (!channelId) {
         throw new Error('Invalid YouTube channel URL format');
       }
 
-      // Fetch channel data
       const channelData = await this.fetchChannelData(channelId);
-      
-      // Perform analysis
       const analysis = this.performAnalysis(channelData);
       
-      // Write to Google Sheets
       await this.writeToSheets(analysis);
-      
-      // Save results as artifact
       await this.saveResults(analysis);
       
       console.log('✅ Analysis completed successfully!');
@@ -80,7 +73,6 @@ class YouTubeChannelAnalyzer {
     
     let channelId;
     
-    // Get channel ID if not direct ID
     if (channelIdentifier.type !== 'id') {
       const searchResponse = await this.youtube.search.list({
         part: ['snippet'],
@@ -98,7 +90,6 @@ class YouTubeChannelAnalyzer {
       channelId = channelIdentifier.value;
     }
 
-    // Get channel details
     const channelResponse = await this.youtube.channels.list({
       part: ['snippet', 'statistics', 'brandingSettings'],
       id: [channelId]
@@ -108,7 +99,6 @@ class YouTubeChannelAnalyzer {
       throw new Error('Channel not found');
     }
 
-    // Get recent videos
     const videosResponse = await this.youtube.search.list({
       part: ['snippet'],
       channelId: channelId,
@@ -119,7 +109,6 @@ class YouTubeChannelAnalyzer {
 
     const videoIds = videosResponse.data.items?.map(item => item.id.videoId) || [];
     
-    // Get video statistics
     let videoStats = [];
     if (videoIds.length > 0) {
       const statsResponse = await this.youtube.videos.list({
@@ -129,7 +118,6 @@ class YouTubeChannelAnalyzer {
       videoStats = statsResponse.data.items || [];
     }
 
-    // Get playlists
     const playlistsResponse = await this.youtube.playlists.list({
       part: ['snippet', 'contentDetails'],
       channelId: channelId,
@@ -151,32 +139,17 @@ class YouTubeChannelAnalyzer {
     const snippet = channel.snippet;
     const brandingSettings = channel.brandingSettings || {};
     
-    // Basic metrics
     const subscriberCount = parseInt(stats.subscriberCount) || 0;
     const totalViews = parseInt(stats.totalViews) || 0;
     const videoCount = parseInt(stats.videoCount) || 0;
     
-    // Enhanced video analysis
     const videoAnalysis = videos.map(video => this.analyzeVideoComprehensive(video));
-    const avgViews = videoAnalysis.reduce((sum, v) => sum + v.views, 0) / videoAnalysis.length || 0;
-    const avgEngagement = videoAnalysis.reduce((sum, v) => sum + v.engagementRate, 0) / videoAnalysis.length || 0;
     
-    // 1. CHANNEL BRANDING & IDENTITY ANALYSIS
     const brandingAnalysis = this.analyzeBrandingComprehensive(channel, brandingSettings);
-    
-    // 2. CONTENT STRATEGY & CONSISTENCY ANALYSIS
     const contentStrategy = this.analyzeContentStrategyComprehensive(videoAnalysis, snippet);
-    
-    // 3. SEO & METADATA ANALYSIS (Per Video)
     const seoAnalysis = this.analyzeSEOComprehensive(videoAnalysis);
-    
-    // 4. ENGAGEMENT SIGNALS ANALYSIS
     const engagementSignals = this.analyzeEngagementSignalsComprehensive(videoAnalysis, subscriberCount);
-    
-    // 5. CONTENT QUALITY & WATCHABILITY ANALYSIS
     const contentQuality = this.analyzeContentQualityComprehensive(videoAnalysis);
-    
-    // 6. PLAYLISTS & CHANNEL STRUCTURE ANALYSIS
     const playlistStructure = this.analyzePlaylistStructureComprehensive(playlists, videoAnalysis);
     
     return {
@@ -192,15 +165,12 @@ class YouTubeChannelAnalyzer {
         customUrl: snippet.customUrl,
         country: snippet.country
       },
-      // COMPREHENSIVE ANALYSIS RESULTS
       brandingIdentity: brandingAnalysis,
       contentStrategy: contentStrategy,
       seoMetadata: seoAnalysis,
       engagementSignals: engagementSignals,
       contentQuality: contentQuality,
       playlistStructure: playlistStructure,
-      
-      // SUMMARY METRICS
       overallScores: {
         brandingScore: brandingAnalysis.overallScore,
         contentStrategyScore: contentStrategy.overallScore,
@@ -209,8 +179,6 @@ class YouTubeChannelAnalyzer {
         contentQualityScore: contentQuality.overallScore,
         playlistScore: playlistStructure.overallScore
       },
-      
-      // TOP RECOMMENDATIONS
       priorityRecommendations: this.generatePriorityRecommendations({
         branding: brandingAnalysis,
         content: contentStrategy,
@@ -219,8 +187,7 @@ class YouTubeChannelAnalyzer {
         quality: contentQuality,
         playlists: playlistStructure
       }),
-      
-      videos: videoAnalysis.slice(0, 15), // Top 15 for detailed analysis
+      videos: videoAnalysis.slice(0, 15),
       analysisDate: new Date().toISOString()
     };
   }
@@ -235,7 +202,6 @@ class YouTubeChannelAnalyzer {
     const comments = parseInt(stats.commentCount) || 0;
     const engagementRate = views > 0 ? ((likes + comments) / views) * 100 : 0;
     
-    // Comprehensive video analysis
     const title = snippet.title;
     const description = snippet.description || '';
     const tags = snippet.tags || [];
@@ -254,42 +220,780 @@ class YouTubeChannelAnalyzer {
       duration,
       thumbnails: snippet.thumbnails,
       categoryId: snippet.categoryId,
-      
-      // DETAILED SEO ANALYSIS
       titleAnalysis: this.analyzeTitleComprehensive(title),
       descriptionAnalysis: this.analyzeDescriptionComprehensive(description),
       tagsAnalysis: this.analyzeTagsComprehensive(tags),
       thumbnailAnalysis: this.analyzeThumbnailComprehensive(snippet.thumbnails),
-      
-      // CONTENT QUALITY INDICATORS
       hasHook: this.detectHook(title, description),
       hasTimestamps: this.detectTimestamps(description),
       hasCallToAction: this.detectCallToAction(description),
       hasLinks: this.detectLinks(description),
       contentStructure: this.analyzeContentStructure(description),
-      
-      // ENGAGEMENT QUALITY
       likeToViewRatio: views > 0 ? (likes / views) * 100 : 0,
       commentToViewRatio: views > 0 ? (comments / views) * 100 : 0,
-      
-      // VIDEO FORMAT CLASSIFICATION
       format: this.classifyVideoFormat(duration, title)
     };
   }
 
-  // 1. CHANNEL BRANDING & IDENTITY ANALYSIS
+  // ENHANCED SEO ANALYSIS WITH FACTUAL INSIGHTS
+  analyzeSEOComprehensive(videos) {
+    const titleAnalysis = this.analyzeTitlesComprehensiveWithInsights(videos);
+    const descriptionAnalysis = this.analyzeDescriptionsComprehensiveWithInsights(videos);
+    const tagsAnalysis = this.analyzeTagsSetComprehensiveWithInsights(videos);
+    const thumbnailAnalysis = this.analyzeThumbnailsComprehensive(videos);
+    
+    const overallScore = (
+      titleAnalysis.averageScore * 0.3 +
+      descriptionAnalysis.averageScore * 0.3 +
+      tagsAnalysis.averageScore * 0.2 +
+      thumbnailAnalysis.averageScore * 0.2
+    );
+
+    const seoInsights = this.generateSEOInsights(titleAnalysis, descriptionAnalysis, tagsAnalysis, videos);
+    
+    return {
+      overallScore,
+      scoreExplanation: this.explainSEOScore(overallScore, titleAnalysis, descriptionAnalysis, tagsAnalysis),
+      titles: titleAnalysis,
+      descriptions: descriptionAnalysis,
+      tags: tagsAnalysis,
+      thumbnails: thumbnailAnalysis,
+      detailedInsights: seoInsights,
+      recommendations: this.generateSEORecommendations(titleAnalysis, descriptionAnalysis, tagsAnalysis, thumbnailAnalysis)
+    };
+  }
+
+  analyzeTitlesComprehensiveWithInsights(videos) {
+    const titleScores = videos.map(video => this.analyzeTitleComprehensive(video.title));
+    const averageScore = titleScores.reduce((sum, analysis) => sum + analysis.score, 0) / titleScores.length || 0;
+    
+    const avgLength = titleScores.reduce((sum, t) => sum + t.length, 0) / titleScores.length;
+    const hasNumbersPercent = (titleScores.filter(t => t.hasNumbers).length / titleScores.length) * 100;
+    const hasPowerWordsPercent = (titleScores.filter(t => t.hasPowerWords).length / titleScores.length) * 100;
+    const isQuestionPercent = (titleScores.filter(t => t.isQuestion).length / titleScores.length) * 100;
+    const optimalLengthPercent = (titleScores.filter(t => t.length >= 30 && t.length <= 60).length / titleScores.length) * 100;
+    
+    const highPerforming = videos.filter(v => v.views > (videos.reduce((sum, vid) => sum + vid.views, 0) / videos.length));
+    const lowPerforming = videos.filter(v => v.views <= (videos.reduce((sum, vid) => sum + vid.views, 0) / videos.length));
+    
+    const bestTitleExample = videos.reduce((best, current) => 
+      current.views > best.views ? current : best, videos[0]);
+    const worstTitleExample = videos.reduce((worst, current) => 
+      current.views < worst.views ? current : worst, videos[0]);
+    
+    return {
+      averageScore,
+      titleAnalyses: titleScores,
+      averageLength: avgLength,
+      optimalLengthPercentage: optimalLengthPercent,
+      hasNumbersPercentage: hasNumbersPercent,
+      hasPowerWordsPercentage: hasPowerWordsPercent,
+      isQuestionPercentage: isQuestionPercent,
+      bestPerformingTitle: {
+        title: bestTitleExample.title,
+        views: bestTitleExample.views,
+        length: bestTitleExample.title.length,
+        hasNumbers: /\d/.test(bestTitleExample.title)
+      },
+      worstPerformingTitle: {
+        title: worstTitleExample.title,
+        views: worstTitleExample.views,
+        length: worstTitleExample.title.length,
+        hasNumbers: /\d/.test(worstTitleExample.title)
+      },
+      patterns: this.identifyTitlePatterns(highPerforming, lowPerforming),
+      specificIssues: this.identifyTitleIssues(titleScores),
+      strengths: this.identifyTitleStrengths(titleScores),
+      weaknesses: this.identifyTitleWeaknesses(titleScores)
+    };
+  }
+
+  analyzeDescriptionsComprehensiveWithInsights(videos) {
+    const descriptionScores = videos.map(video => this.analyzeDescriptionComprehensive(video.description));
+    const averageScore = descriptionScores.reduce((sum, analysis) => sum + analysis.score, 0) / descriptionScores.length || 0;
+    
+    const avgLength = descriptionScores.reduce((sum, d) => sum + d.length, 0) / descriptionScores.length;
+    const hasLinksPercent = (descriptionScores.filter(d => d.hasLinks).length / descriptionScores.length) * 100;
+    const hasTimestampsPercent = (descriptionScores.filter(d => d.hasTimestamps).length / descriptionScores.length) * 100;
+    const hasCTAPercent = (descriptionScores.filter(d => d.hasCallToAction).length / descriptionScores.length) * 100;
+    const adequateLengthPercent = (descriptionScores.filter(d => d.length >= 200).length / descriptionScores.length) * 100;
+    
+    const bestDescription = videos.reduce((best, current) => 
+      this.analyzeDescriptionComprehensive(current.description).score > 
+      this.analyzeDescriptionComprehensive(best.description).score ? current : best, videos[0]);
+    
+    const emptyDescriptions = videos.filter(v => !v.description || v.description.length < 50);
+    
+    return {
+      averageScore,
+      descriptionAnalyses: descriptionScores,
+      averageLength: avgLength,
+      adequateLengthPercentage: adequateLengthPercent,
+      hasLinksPercentage: hasLinksPercent,
+      hasTimestampsPercentage: hasTimestampsPercent,
+      hasCTAPercentage: hasCTAPercent,
+      emptyDescriptionsCount: emptyDescriptions.length,
+      bestExample: {
+        title: bestDescription.title,
+        descriptionLength: bestDescription.description?.length || 0,
+        score: this.analyzeDescriptionComprehensive(bestDescription.description).score
+      },
+      specificIssues: this.identifyDescriptionIssues(descriptionScores, videos),
+      strengths: this.identifyDescriptionStrengths(descriptionScores),
+      weaknesses: this.identifyDescriptionWeaknesses(descriptionScores)
+    };
+  }
+
+  analyzeTagsSetComprehensiveWithInsights(videos) {
+    const tagScores = videos.map(video => this.analyzeTagsComprehensive(video.tags));
+    const averageScore = tagScores.reduce((sum, analysis) => sum + analysis.score, 0) / tagScores.length || 0;
+    
+    const videosWithNoTags = videos.filter(v => !v.tags || v.tags.length === 0);
+    const videosWithFewTags = videos.filter(v => v.tags && v.tags.length > 0 && v.tags.length < 5);
+    const videosWithGoodTags = videos.filter(v => v.tags && v.tags.length >= 8 && v.tags.length <= 15);
+    
+    const avgTagCount = videos.reduce((sum, v) => sum + (v.tags?.length || 0), 0) / videos.length;
+    
+    const allTags = videos.flatMap(v => v.tags || []);
+    const uniqueTags = [...new Set(allTags)];
+    const tagFrequency = {};
+    allTags.forEach(tag => {
+      tagFrequency[tag] = (tagFrequency[tag] || 0) + 1;
+    });
+    
+    const mostUsedTags = Object.entries(tagFrequency)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 10)
+      .map(([tag, count]) => ({ tag, count }));
+    
+    return {
+      averageScore,
+      tagAnalyses: tagScores,
+      averageTagCount: avgTagCount,
+      videosWithNoTagsCount: videosWithNoTags.length,
+      videosWithFewTagsCount: videosWithFewTags.length,
+      videosWithGoodTagsCount: videosWithGoodTags.length,
+      noTagsPercentage: (videosWithNoTags.length / videos.length) * 100,
+      totalUniqueTagsUsed: uniqueTags.length,
+      mostUsedTags: mostUsedTags,
+      tagsExploration: this.explainTagsScore(averageScore, videosWithNoTags.length, avgTagCount),
+      specificVideosNeedingTags: videosWithNoTags.slice(0, 5).map(v => ({
+        title: v.title.substring(0, 50) + '...',
+        views: v.views
+      })),
+      strengths: this.identifyTagStrengths(tagScores),
+      weaknesses: this.identifyTagWeaknesses(tagScores)
+    };
+  }
+
+  // FACTUAL SEO INSIGHTS GENERATOR
+  generateSEOInsights(titleAnalysis, descriptionAnalysis, tagsAnalysis, videos) {
+    const insights = [];
+    
+    if (titleAnalysis.averageLength < 30) {
+      insights.push({
+        category: "Title Length",
+        severity: "High",
+        finding: `${Math.round((titleAnalysis.titleAnalyses.filter(t => t.length < 30).length / videos.length) * 100)}% of your titles are under 30 characters`,
+        impact: "Factual: Shorter titles have less space for descriptive keywords",
+        example: `Shortest title: "${titleAnalysis.worstPerformingTitle.title}" (${titleAnalysis.worstPerformingTitle.length} chars)`,
+        solution: "Consider extending titles to 40-60 characters with descriptive keywords"
+      });
+    }
+    
+    if (titleAnalysis.hasNumbersPercentage < 30) {
+      insights.push({
+        category: "Title Content",
+        severity: "Medium",
+        finding: `${Math.round(titleAnalysis.hasNumbersPercentage)}% of your titles include numbers`,
+        impact: "Observation: Numbers can provide specific information to viewers",
+        example: titleAnalysis.bestPerformingTitle.hasNumbers ? 
+          `Your best performing video includes numbers: "${titleAnalysis.bestPerformingTitle.title}"` :
+          "Your top performing videos don't use numbers in titles",
+        solution: "Consider adding specific numbers, years, or quantities where relevant"
+      });
+    }
+    
+    if (descriptionAnalysis.averageLength < 150) {
+      insights.push({
+        category: "Description Length",
+        severity: "High",
+        finding: `Average description length is ${Math.round(descriptionAnalysis.averageLength)} characters`,
+        impact: "Factual: Short descriptions provide limited context for viewers and search",
+        example: `${descriptionAnalysis.emptyDescriptionsCount} videos have minimal descriptions (under 50 chars)`,
+        solution: "Consider writing more detailed descriptions (200+ characters)"
+      });
+    }
+    
+    if (descriptionAnalysis.hasTimestampsPercentage < 20) {
+      insights.push({
+        category: "Video Navigation",
+        severity: "Medium",
+        finding: `${Math.round(descriptionAnalysis.hasTimestampsPercentage)}% of videos include timestamps`,
+        impact: "Factual: Timestamps help viewers navigate longer content",
+        example: "Most videos over 5 minutes could benefit from chapter markers",
+        solution: "Add timestamps to descriptions for videos over 5 minutes"
+      });
+    }
+    
+    if (tagsAnalysis.noTagsPercentage > 10) {
+      insights.push({
+        category: "Tags Usage",
+        severity: "Critical",
+        finding: `${tagsAnalysis.videosWithNoTagsCount} out of ${videos.length} videos (${Math.round(tagsAnalysis.noTagsPercentage)}%) have zero tags`,
+        impact: "Factual: Tags help YouTube understand video content for categorization",
+        example: tagsAnalysis.specificVideosNeedingTags.length > 0 ?
+          `Videos without tags: "${tagsAnalysis.specificVideosNeedingTags[0].title}"` :
+          "Multiple recent videos missing tags entirely",
+        solution: "Add relevant tags to videos that currently have none"
+      });
+    }
+    
+    return insights;
+  }
+
+  // ENHANCED ENGAGEMENT ANALYSIS WITH FACTUAL INSIGHTS
+  analyzeEngagementSignalsComprehensive(videos, subscriberCount) {
+    const totalViews = videos.reduce((sum, v) => sum + v.views, 0);
+    const avgViews = totalViews / videos.length;
+    
+    const viewsToSubsRatio = (avgViews / subscriberCount) * 100;
+    const viewsToSubsScore = Math.min(viewsToSubsRatio * 10, 100);
+    
+    const likeRatios = videos.map(v => v.likeToViewRatio);
+    const avgLikeRatio = likeRatios.reduce((sum, r) => sum + r, 0) / likeRatios.length;
+    const likeRatioScore = Math.min(avgLikeRatio * 25, 100);
+    
+    const commentAnalysis = this.analyzeCommentQuality(videos);
+    const engagementConsistency = this.analyzeEngagementConsistency(videos);
+    
+    const overallScore = (
+      viewsToSubsScore * 0.3 +
+      likeRatioScore * 0.25 +
+      commentAnalysis.qualityScore * 0.25 +
+      engagementConsistency * 0.2
+    );
+
+    const engagementInsights = this.generateEngagementInsights(videos, avgViews, avgLikeRatio, subscriberCount);
+    
+    return {
+      overallScore,
+      scoreExplanation: this.explainEngagementScore(overallScore, viewsToSubsRatio, avgLikeRatio, commentAnalysis),
+      viewsToSubscribers: {
+        ratio: viewsToSubsRatio,
+        score: viewsToSubsScore,
+        benchmark: viewsToSubsRatio > 15 ? 'Excellent' : viewsToSubsRatio > 8 ? 'Good' : 'Needs Improvement'
+      },
+      likeEngagement: {
+        averageRatio: avgLikeRatio,
+        score: likeRatioScore,
+        benchmark: avgLikeRatio > 3 ? 'Excellent' : avgLikeRatio > 1.5 ? 'Good' : 'Needs Improvement'
+      },
+      commentEngagement: commentAnalysis,
+      consistency: engagementConsistency,
+      detailedInsights: engagementInsights,
+      recommendations: this.generateEngagementRecommendations(viewsToSubsScore, likeRatioScore, commentAnalysis)
+    };
+  }
+
+  // FACTUAL ENGAGEMENT INSIGHTS GENERATOR
+  generateEngagementInsights(videos, avgViews, avgLikeRatio, subscriberCount) {
+    const insights = [];
+    
+    const viewsToSubsRatio = (avgViews / subscriberCount) * 100;
+    if (viewsToSubsRatio < 5) {
+      insights.push({
+        category: "View Performance",
+        severity: "High",
+        finding: `Your videos average ${avgViews.toLocaleString()} views with ${subscriberCount.toLocaleString()} subscribers (${viewsToSubsRatio.toFixed(1)}% ratio)`,
+        impact: "Observation: Low view-to-subscriber ratio indicates limited reach to existing audience",
+        analysis: "Possible factors: notification settings, content timing, or audience interest",
+        solution: "Consider reviewing video hooks, thumbnails, and posting schedule"
+      });
+    }
+    
+    if (avgLikeRatio < 1.5) {
+      insights.push({
+        category: "Like Engagement",
+        severity: "Medium",
+        finding: `Average like-to-view ratio is ${avgLikeRatio.toFixed(2)}% (typical range: 2-4%)`,
+        impact: "Observation: Lower like rates compared to general benchmarks",
+        analysis: this.analyzeLikePatterns(videos),
+        solution: "Consider asking for engagement or reviewing content value proposition"
+      });
+    }
+    
+    const avgCommentRatio = videos.reduce((sum, v) => sum + v.commentToViewRatio, 0) / videos.length;
+    if (avgCommentRatio < 0.3) {
+      insights.push({
+        category: "Comment Engagement",
+        severity: "Medium",
+        finding: `Comment rate is ${avgCommentRatio.toFixed(2)}% (typical range: 0.5-2%)`,
+        impact: "Observation: Limited discussion generated by content",
+        analysis: "Videos may lack conversation starters or community engagement",
+        solution: "Consider ending videos with questions or discussion prompts"
+      });
+    }
+    
+    const viewCounts = videos.map(v => v.views);
+    const maxViews = Math.max(...viewCounts);
+    const minViews = Math.min(...viewCounts);
+    const variation = ((maxViews - minViews) / avgViews) * 100;
+    
+    if (variation > 200) {
+      const bestVideo = videos.find(v => v.views === maxViews);
+      const worstVideo = videos.find(v => v.views === minViews);
+      
+      insights.push({
+        category: "Performance Consistency",
+        severity: "Medium",
+        finding: `High variation in video performance: ${maxViews.toLocaleString()} views (best) vs ${minViews.toLocaleString()} views (worst)`,
+        impact: "Observation: Inconsistent performance patterns detected",
+        analysis: `Best: "${bestVideo.title.substring(0, 40)}..." vs Worst: "${worstVideo.title.substring(0, 40)}..."`,
+        solution: "Review differences between top and bottom performing videos"
+      });
+    }
+    
+    return insights;
+  }
+
+  // ENHANCED CONTENT QUALITY ANALYSIS
+  analyzeContentQualityComprehensive(videos) {
+    const hookAnalysis = this.analyzeHooksWithInsights(videos);
+    const structureAnalysis = this.analyzeContentStructureSetWithInsights(videos);
+    const ctaAnalysis = this.analyzeCallsToActionWithInsights(videos);
+    const professionalQuality = this.analyzeProfessionalQualityWithInsights(videos);
+    
+    const overallScore = (
+      hookAnalysis.score * 0.3 +
+      structureAnalysis.score * 0.25 +
+      ctaAnalysis.score * 0.25 +
+      professionalQuality.score * 0.2
+    );
+    
+    return {
+      overallScore,
+      scoreExplanation: this.explainContentQualityScore(overallScore, hookAnalysis, structureAnalysis, ctaAnalysis),
+      hooks: hookAnalysis,
+      structure: structureAnalysis,
+      callsToAction: ctaAnalysis,
+      professionalQuality,
+      recommendations: this.generateContentQualityRecommendations(hookAnalysis, structureAnalysis, ctaAnalysis, professionalQuality)
+    };
+  }
+
+  analyzeHooksWithInsights(videos) {
+    const hookAnalysis = videos.map(video => {
+      const title = video.title.toLowerCase();
+      const description = video.description.toLowerCase();
+      
+      const hookWords = ['ultimate', 'secret', 'mistake', 'never', 'always', 'best', 'worst', 'shocking', 'amazing', 'incredible'];
+      const questionWords = ['how', 'what', 'why', 'when', 'where'];
+      const urgencyWords = ['now', 'today', 'immediately', 'urgent', 'breaking'];
+      
+      let hookScore = 0;
+      const hookElements = [];
+      
+      if (hookWords.some(word => title.includes(word))) {
+        hookScore += 30;
+        hookElements.push('power words');
+      }
+      if (questionWords.some(word => title.startsWith(word))) {
+        hookScore += 25;
+        hookElements.push('question format');
+      }
+      if (urgencyWords.some(word => title.includes(word))) {
+        hookScore += 20;
+        hookElements.push('urgency');
+      }
+      if (title.includes('?') || title.includes('!')) {
+        hookScore += 15;
+        hookElements.push('punctuation');
+      }
+      if (/\d/.test(title)) {
+        hookScore += 10;
+        hookElements.push('numbers');
+      }
+      
+      return {
+        videoTitle: video.title,
+        score: Math.min(hookScore, 100),
+        elements: hookElements,
+        views: video.views
+      };
+    });
+    
+    const averageScore = hookAnalysis.reduce((sum, analysis) => sum + analysis.score, 0) / hookAnalysis.length || 0;
+    const strongHooks = hookAnalysis.filter(h => h.score > 60);
+    const weakHooks = hookAnalysis.filter(h => h.score < 30);
+    
+    const bestHook = hookAnalysis.reduce((best, current) => 
+      current.score > best.score ? current : best, hookAnalysis[0]);
+    const worstHook = hookAnalysis.reduce((worst, current) => 
+      current.score < worst.score ? current : worst, hookAnalysis[0]);
+    
+    return {
+      score: averageScore,
+      videosWithStrongHooks: strongHooks.length,
+      videosWithWeakHooks: weakHooks.length,
+      averageHookScore: averageScore,
+      bestExample: bestHook,
+      worstExample: worstHook,
+      hookInsights: this.generateHookInsights(hookAnalysis, videos),
+      recommendations: this.generateHookRecommendations(averageScore, weakHooks.length, videos.length)
+    };
+  }
+
+  // FACTUAL HOOK INSIGHTS GENERATOR
+  generateHookInsights(hookAnalysis, videos) {
+    const insights = [];
+    
+    const weakHooks = hookAnalysis.filter(h => h.score < 30);
+    if (weakHooks.length > videos.length * 0.5) {
+      insights.push({
+        finding: `${weakHooks.length} out of ${videos.length} videos have low hook scores (under 30%)`,
+        impact: "Observation: Most titles lack engaging elements like questions or specific details",
+        pattern: "Common pattern: Titles tend to be descriptive rather than curiosity-generating",
+        examples: weakHooks.slice(0, 3).map(h => `"${h.videoTitle.substring(0, 50)}..."`).join(', ')
+      });
+    }
+    
+    const noNumbers = hookAnalysis.filter(h => !h.elements.includes('numbers'));
+    if (noNumbers.length > videos.length * 0.7) {
+      insights.push({
+        finding: `${noNumbers.length} videos don't use numbers in titles`,
+        impact: "Observation: Numbers can provide specific, concrete information",
+        pattern: "Titles focus on general concepts rather than specific quantities",
+        examples: "Consider formats like: '5 Ways to...', '2024 Guide', 'Top 10...'"
+      });
+    }
+    
+    const noQuestions = hookAnalysis.filter(h => !h.elements.includes('question format'));
+    if (noQuestions.length > videos.length * 0.8) {
+      insights.push({
+        finding: `${noQuestions.length} videos don't use question-based titles`,
+        impact: "Observation: Question formats can create viewer curiosity",
+        pattern: "Titles tend to make statements rather than pose questions",
+        examples: "Consider formats like: 'Why Does...?', 'What Happens When...?', 'How To...?'"
+      });
+    }
+    
+    return insights;
+  }
+
+  // HELPER METHODS FOR COMPREHENSIVE ANALYSIS
+  parseDuration(duration) {
+    if (!duration) return 0;
+    const match = duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
+    if (!match) return 0;
+    
+    const hours = parseInt(match[1]) || 0;
+    const minutes = parseInt(match[2]) || 0;
+    const seconds = parseInt(match[3]) || 0;
+    
+    return hours * 3600 + minutes * 60 + seconds;
+  }
+
+  analyzeTitleComprehensive(title) {
+    let score = 0;
+    
+    if (title.length >= 30 && title.length <= 60) score += 25;
+    else if (title.length > 60) score += 15;
+    else score += 10;
+    
+    const words = title.toLowerCase().split(' ');
+    if (words.length >= 5) score += 20;
+    
+    const powerWords = ['ultimate', 'complete', 'best', 'guide', 'tutorial', 'how to', 'tips', 'secrets'];
+    if (powerWords.some(word => title.toLowerCase().includes(word))) score += 20;
+    
+    if (/\d/.test(title)) score += 15;
+    if (title.includes('?')) score += 10;
+    if (title.toLowerCase().includes('how to') || title.toLowerCase().includes('what is')) score += 10;
+    
+    return {
+      score: Math.min(score, 100),
+      length: title.length,
+      hasNumbers: /\d/.test(title),
+      hasPowerWords: powerWords.some(word => title.toLowerCase().includes(word)),
+      isQuestion: title.includes('?'),
+      naturalLanguage: title.toLowerCase().includes('how to') || title.toLowerCase().includes('what is')
+    };
+  }
+
+  analyzeDescriptionComprehensive(description) {
+    if (!description) return { score: 0, issues: ['No description provided'] };
+    
+    let score = 0;
+    const issues = [];
+    const strengths = [];
+    
+    if (description.length >= 200) {
+      score += 25;
+      strengths.push('Good description length');
+    } else {
+      issues.push('Description too short (aim for 200+ characters)');
+    }
+    
+    if (description.includes('http')) {
+      score += 15;
+      strengths.push('Contains links');
+    } else {
+      issues.push('No links to additional resources');
+    }
+    
+    if (description.includes('\n')) {
+      score += 15;
+      strengths.push('Well-structured with line breaks');
+    }
+    
+    if (/\d+:\d+/.test(description)) {
+      score += 20;
+      strengths.push('Includes timestamps');
+    } else {
+      issues.push('No timestamps for navigation');
+    }
+    
+    const cta = ['subscribe', 'like', 'comment', 'share', 'bell'];
+    if (cta.some(word => description.toLowerCase().includes(word))) {
+      score += 15;
+      strengths.push('Has call-to-action');
+    } else {
+      issues.push('Missing call-to-action');
+    }
+    
+    if (description.includes('twitter') || description.includes('instagram')) {
+      score += 10;
+      strengths.push('Links to social media');
+    }
+    
+    return {
+      score: Math.min(score, 100),
+      length: description.length,
+      hasLinks: description.includes('http'),
+      hasTimestamps: /\d+:\d+/.test(description),
+      hasCallToAction: cta.some(word => description.toLowerCase().includes(word)),
+      strengths,
+      issues
+    };
+  }
+
+  analyzeTagsComprehensive(tags) {
+    if (!tags || tags.length === 0) {
+      return { 
+        score: 0, 
+        count: 0, 
+        issues: ['No tags provided'],
+        recommendations: ['Add 8-15 relevant tags per video']
+      };
+    }
+    
+    let score = 0;
+    const issues = [];
+    const strengths = [];
+    
+    if (tags.length >= 8 && tags.length <= 15) {
+      score += 40;
+      strengths.push('Good tag quantity');
+    } else if (tags.length >= 5) {
+      score += 25;
+      issues.push('Could use more tags (aim for 8-15)');
+    } else {
+      issues.push('Too few tags (minimum 5 recommended)');
+    }
+    
+    const shortTags = tags.filter(tag => tag.length <= 15).length;
+    const longTags = tags.filter(tag => tag.length > 15).length;
+    if (shortTags > 0 && longTags > 0) {
+      score += 20;
+      strengths.push('Good mix of short and long-tail tags');
+    }
+    
+    if (tags.some(tag => tag.includes(' '))) {
+      score += 20;
+      strengths.push('Includes long-tail keywords');
+    }
+    
+    if (tags.some(tag => tag.length > 20)) {
+      score += 20;
+      strengths.push('Has specific/niche tags');
+    }
+    
+    return {
+      score: Math.min(score, 100),
+      count: tags.length,
+      hasVariety: shortTags > 0 && longTags > 0,
+      hasLongTail: tags.some(tag => tag.includes(' ')),
+      strengths,
+      issues,
+      recommendations: this.getTagRecommendations(tags.length)
+    };
+  }
+
+  getTagRecommendations(tagCount) {
+    if (tagCount === 0) return ['Add relevant tags to improve discoverability'];
+    if (tagCount < 5) return ['Add more tags (aim for 8-15 total)'];
+    if (tagCount > 15) return ['Too many tags may dilute relevance'];
+    return ['Good tag count - ensure they are all relevant'];
+  }
+
+  analyzeThumbnailComprehensive(thumbnails) {
+    if (!thumbnails) return { score: 30, issues: ['No thumbnail data available'] };
+    
+    let score = 60;
+    const strengths = [];
+    
+    if (thumbnails.high) {
+      score += 20;
+      strengths.push('High resolution available');
+    }
+    
+    if (thumbnails.maxres) {
+      score += 20;
+      strengths.push('Maximum resolution available');
+    }
+    
+    return {
+      score: Math.min(score, 100),
+      hasHighRes: !!thumbnails.high,
+      hasMaxRes: !!thumbnails.maxres,
+      strengths,
+      recommendations: ['Consider custom thumbnails for better click-through rates']
+    };
+  }
+
+  // CONTENT QUALITY HELPERS
+  detectHook(title, description) {
+    const hookWords = ['ultimate', 'secret', 'mistake', 'never', 'always', 'best', 'worst', 'shocking'];
+    const titleHook = hookWords.some(word => title.toLowerCase().includes(word));
+    const descHook = description.toLowerCase().includes('in this video') || description.toLowerCase().includes('today we');
+    return titleHook || descHook;
+  }
+
+  detectTimestamps(description) {
+    return /\d+:\d+/.test(description) && description.includes('\n');
+  }
+
+  detectCallToAction(description) {
+    const cta = ['subscribe', 'like', 'comment', 'share', 'bell', 'notification'];
+    return cta.some(word => description.toLowerCase().includes(word));
+  }
+
+  detectLinks(description) {
+    return /https?:\/\/[^\s]+/.test(description);
+  }
+
+  classifyVideoFormat(duration, title) {
+    if (duration < 60) return 'Short';
+    if (duration < 300) return 'Quick Tutorial';
+    if (duration < 1200) return 'Standard';
+    if (duration < 3600) return 'Long-form';
+    return 'Extended/Stream';
+  }
+
+  analyzeContentStructure(description) {
+    if (!description) return { score: 0, hasStructure: false };
+    
+    let score = 0;
+    const hasLineBreaks = description.includes('\n');
+    const hasSections = description.split('\n').length > 3;
+    const hasTimestamps = /\d+:\d+/.test(description);
+    const hasHeaders = /^[A-Z][^a-z]*:/.test(description);
+    
+    if (hasLineBreaks) score += 25;
+    if (hasSections) score += 25;
+    if (hasTimestamps) score += 30;
+    if (hasHeaders) score += 20;
+    
+    return {
+      score: Math.min(score, 100),
+      hasStructure: score > 40,
+      hasLineBreaks,
+      hasSections,
+      hasTimestamps,
+      hasHeaders
+    };
+  }
+
+  analyzeContentStructureSetWithInsights(videos) {
+    const structureAnalysis = videos.map(video => this.analyzeContentStructure(video.description));
+    const averageScore = structureAnalysis.reduce((sum, analysis) => sum + analysis.score, 0) / structureAnalysis.length || 0;
+    
+    return {
+      score: averageScore,
+      videosWithStructure: structureAnalysis.filter(analysis => analysis.hasStructure).length,
+      videosWithTimestamps: structureAnalysis.filter(analysis => analysis.hasTimestamps).length
+    };
+  }
+
+  analyzeCallsToActionWithInsights(videos) {
+    const ctaAnalysis = videos.map(video => {
+      const description = video.description.toLowerCase();
+      
+      const ctaWords = ['subscribe', 'like', 'comment', 'share', 'bell', 'notification', 'follow', 'join'];
+      const foundCTAs = ctaWords.filter(word => description.includes(word));
+      
+      let score = foundCTAs.length * 15;
+      if (description.includes('subscribe') && description.includes('bell')) score += 20;
+      if (description.includes('comment below')) score += 10;
+      if (description.includes('share') && description.includes('friends')) score += 10;
+      
+      return Math.min(score, 100);
+    });
+    
+    const averageScore = ctaAnalysis.reduce((sum, score) => sum + score, 0) / ctaAnalysis.length || 0;
+    
+    return {
+      score: averageScore,
+      videosWithCTA: ctaAnalysis.filter(score => score > 30).length,
+      averageCTAScore: averageScore,
+      recommendations: averageScore < 50 ? ['Add clear calls-to-action in video descriptions'] : []
+    };
+  }
+
+  analyzeProfessionalQualityWithInsights(videos) {
+    const qualityAnalysis = videos.map(video => {
+      let score = 50;
+      
+      const title = video.title;
+      if (title.length >= 30 && title.length <= 60) score += 15;
+      if (!/ALL CAPS/.test(title) && title !== title.toUpperCase()) score += 10;
+      
+      const description = video.description;
+      if (description && description.length >= 200) score += 15;
+      if (description && description.includes('http')) score += 5;
+      
+      if (video.tags && video.tags.length >= 5) score += 5;
+      
+      return Math.min(score, 100);
+    });
+    
+    const averageScore = qualityAnalysis.reduce((sum, score) => sum + score, 0) / qualityAnalysis.length || 0;
+    
+    return {
+      score: averageScore,
+      indicators: {
+        properTitleLength: qualityAnalysis.filter((_, i) => {
+          const title = videos[i].title;
+          return title.length >= 30 && title.length <= 60;
+        }).length,
+        adequateDescriptions: qualityAnalysis.filter((_, i) => {
+          return videos[i].description && videos[i].description.length >= 200;
+        }).length
+      }
+    };
+  }
+
+  // BRANDING AND STRATEGY ANALYSIS
   analyzeBrandingComprehensive(channel, brandingSettings) {
     const snippet = channel.snippet;
-    const stats = channel.statistics;
     
-    // Channel Name Analysis
     const channelNameAnalysis = {
       clarity: this.analyzeChannelNameClarity(snippet.title),
       memorability: this.analyzeChannelNameMemorability(snippet.title),
       nicheAlignment: this.analyzeChannelNameNiche(snippet.title, snippet.description)
     };
     
-    // Profile Image & Banner Analysis
     const visualIdentity = {
       profileImageQuality: snippet.thumbnails?.high ? 85 : 45,
       bannerPresent: !!brandingSettings.image?.bannerExternalUrl,
@@ -297,7 +1001,6 @@ class YouTubeChannelAnalyzer {
       visualConsistency: this.analyzeVisualConsistency(snippet.thumbnails, brandingSettings)
     };
     
-    // About Section Analysis
     const aboutSection = {
       descriptionLength: snippet.description?.length || 0,
       keywordOptimized: this.analyzeDescriptionKeywords(snippet.description),
@@ -323,18 +1026,10 @@ class YouTubeChannelAnalyzer {
     };
   }
 
-  // 2. CONTENT STRATEGY & CONSISTENCY ANALYSIS
   analyzeContentStrategyComprehensive(videos, channelSnippet) {
-    // Upload Frequency & Consistency
     const uploadAnalysis = this.analyzeUploadPattern(videos);
-    
-    // Content Themes Analysis
     const themeAnalysis = this.analyzeContentThemes(videos);
-    
-    // Video Formats Analysis
     const formatAnalysis = this.analyzeVideoFormats(videos);
-    
-    // Target Audience Analysis
     const audienceAnalysis = this.analyzeTargetAudience(videos, channelSnippet);
     
     const overallScore = (
@@ -354,107 +1049,6 @@ class YouTubeChannelAnalyzer {
     };
   }
 
-  // 3. SEO & METADATA ANALYSIS
-  analyzeSEOComprehensive(videos) {
-    const titleAnalysis = this.analyzeTitlesComprehensive(videos);
-    const descriptionAnalysis = this.analyzeDescriptionsComprehensive(videos);
-    const tagsAnalysis = this.analyzeTagsSetComprehensive(videos);
-    const thumbnailAnalysis = this.analyzeThumbnailsComprehensive(videos);
-    
-    const overallScore = (
-      titleAnalysis.averageScore * 0.3 +
-      descriptionAnalysis.averageScore * 0.3 +
-      tagsAnalysis.averageScore * 0.2 +
-      thumbnailAnalysis.averageScore * 0.2
-    );
-    
-    return {
-      overallScore,
-      titles: titleAnalysis,
-      descriptions: descriptionAnalysis,
-      tags: tagsAnalysis,
-      thumbnails: thumbnailAnalysis,
-      recommendations: this.generateSEORecommendations(titleAnalysis, descriptionAnalysis, tagsAnalysis, thumbnailAnalysis)
-    };
-  }
-
-  // 4. ENGAGEMENT SIGNALS ANALYSIS
-  analyzeEngagementSignalsComprehensive(videos, subscriberCount) {
-    const totalViews = videos.reduce((sum, v) => sum + v.views, 0);
-    const avgViews = totalViews / videos.length;
-    
-    // Views-to-Subscribers Ratio
-    const viewsToSubsRatio = (avgViews / subscriberCount) * 100;
-    const viewsToSubsScore = Math.min(viewsToSubsRatio * 10, 100); // 10% = 100 points
-    
-    // Like-to-View Ratio Analysis
-    const likeRatios = videos.map(v => v.likeToViewRatio);
-    const avgLikeRatio = likeRatios.reduce((sum, r) => sum + r, 0) / likeRatios.length;
-    const likeRatioScore = Math.min(avgLikeRatio * 25, 100); // 4% = 100 points
-    
-    // Comment Quality Analysis
-    const commentAnalysis = this.analyzeCommentQuality(videos);
-    
-    // Engagement Consistency
-    const engagementConsistency = this.analyzeEngagementConsistency(videos);
-    
-    const overallScore = (
-      viewsToSubsScore * 0.3 +
-      likeRatioScore * 0.25 +
-      commentAnalysis.qualityScore * 0.25 +
-      engagementConsistency * 0.2
-    );
-    
-    return {
-      overallScore,
-      viewsToSubscribers: {
-        ratio: viewsToSubsRatio,
-        score: viewsToSubsScore,
-        benchmark: viewsToSubsRatio > 15 ? 'Excellent' : viewsToSubsRatio > 8 ? 'Good' : 'Needs Improvement'
-      },
-      likeEngagement: {
-        averageRatio: avgLikeRatio,
-        score: likeRatioScore,
-        benchmark: avgLikeRatio > 3 ? 'Excellent' : avgLikeRatio > 1.5 ? 'Good' : 'Needs Improvement'
-      },
-      commentEngagement: commentAnalysis,
-      consistency: engagementConsistency,
-      recommendations: this.generateEngagementRecommendations(viewsToSubsScore, likeRatioScore, commentAnalysis)
-    };
-  }
-
-  // 5. CONTENT QUALITY & WATCHABILITY ANALYSIS
-  analyzeContentQualityComprehensive(videos) {
-    // Hook Analysis (First 10-15 seconds indicators)
-    const hookAnalysis = this.analyzeHooks(videos);
-    
-    // Structure Analysis
-    const structureAnalysis = this.analyzeContentStructureSet(videos);
-    
-    // Call to Action Analysis
-    const ctaAnalysis = this.analyzeCallsToAction(videos);
-    
-    // Professional Quality Indicators
-    const professionalQuality = this.analyzeProfessionalQuality(videos);
-    
-    const overallScore = (
-      hookAnalysis.score * 0.3 +
-      structureAnalysis.score * 0.25 +
-      ctaAnalysis.score * 0.25 +
-      professionalQuality.score * 0.2
-    );
-    
-    return {
-      overallScore,
-      hooks: hookAnalysis,
-      structure: structureAnalysis,
-      callsToAction: ctaAnalysis,
-      professionalQuality,
-      recommendations: this.generateContentQualityRecommendations(hookAnalysis, structureAnalysis, ctaAnalysis, professionalQuality)
-    };
-  }
-
-  // 6. PLAYLISTS & CHANNEL STRUCTURE ANALYSIS
   analyzePlaylistStructureComprehensive(playlists, videos) {
     if (!playlists || playlists.length === 0) {
       return {
@@ -470,13 +1064,8 @@ class YouTubeChannelAnalyzer {
       };
     }
     
-    // Playlist Organization Analysis
     const organizationAnalysis = this.analyzePlaylistOrganization(playlists);
-    
-    // Binge-Watching Potential
     const bingeAnalysis = this.analyzeBingeWatchingPotential(playlists);
-    
-    // Thematic Grouping
     const thematicAnalysis = this.analyzeThematicGrouping(playlists, videos);
     
     const overallScore = (
@@ -494,35 +1083,20 @@ class YouTubeChannelAnalyzer {
     };
   }
 
-  // HELPER FUNCTIONS FOR COMPREHENSIVE ANALYSIS
-
-  // Duration Parser
-  parseDuration(duration) {
-    if (!duration) return 0;
-    const match = duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
-    if (!match) return 0;
-    
-    const hours = parseInt(match[1]) || 0;
-    const minutes = parseInt(match[2]) || 0;
-    const seconds = parseInt(match[3]) || 0;
-    
-    return hours * 3600 + minutes * 60 + seconds;
-  }
-
-  // CHANNEL BRANDING ANALYSIS HELPERS
+  // ALL HELPER METHODS
   analyzeChannelNameClarity(name) {
     let score = 50;
-    if (name.length >= 5 && name.length <= 25) score += 25; // Good length
-    if (!name.includes('Official') && !name.includes('TV')) score += 15; // Avoid generic terms
-    if (name.split(' ').length <= 3) score += 10; // Memorable
+    if (name.length >= 5 && name.length <= 25) score += 25;
+    if (!name.includes('Official') && !name.includes('TV')) score += 15;
+    if (name.split(' ').length <= 3) score += 10;
     return Math.min(score, 100);
   }
 
   analyzeChannelNameMemorability(name) {
     let score = 50;
-    if (name.length <= 20) score += 20; // Short is memorable
-    if (!/\d{4,}/.test(name)) score += 15; // No long numbers
-    if (!name.includes('_') && !name.includes('-')) score += 15; // Clean
+    if (name.length <= 20) score += 20;
+    if (!/\d{4,}/.test(name)) score += 15;
+    if (!name.includes('_') && !name.includes('-')) score += 15;
     return Math.min(score, 100);
   }
 
@@ -592,7 +1166,6 @@ class YouTubeChannelAnalyzer {
     return Math.min(score, 100);
   }
 
-  // CONTENT STRATEGY ANALYSIS HELPERS
   analyzeUploadPattern(videos) {
     const dates = videos.map(v => new Date(v.publishedAt)).sort((a, b) => b - a);
     const intervals = [];
@@ -694,7 +1267,6 @@ class YouTubeChannelAnalyzer {
   }
 
   analyzeTargetAudience(videos, channelSnippet) {
-    // Analyze titles and descriptions for audience indicators
     const allText = videos.map(v => v.title + ' ' + v.description).join(' ').toLowerCase();
     
     const audienceIndicators = {
@@ -730,353 +1302,17 @@ class YouTubeChannelAnalyzer {
     return counts;
   }
 
-  // SEO ANALYSIS HELPERS
-  analyzeTitleComprehensive(title) {
-    let score = 0;
-    
-    // Length optimization
-    if (title.length >= 30 && title.length <= 60) score += 25;
-    else if (title.length > 60) score += 15;
-    else score += 10;
-    
-    // Keyword placement
-    const words = title.toLowerCase().split(' ');
-    if (words.length >= 5) score += 20;
-    
-    // Power words
-    const powerWords = ['ultimate', 'complete', 'best', 'guide', 'tutorial', 'how to', 'tips', 'secrets'];
-    if (powerWords.some(word => title.toLowerCase().includes(word))) score += 20;
-    
-    // Numbers
-    if (/\d/.test(title)) score += 15;
-    
-    // Questions
-    if (title.includes('?')) score += 10;
-    
-    // Natural language
-    if (title.toLowerCase().includes('how to') || title.toLowerCase().includes('what is')) score += 10;
+  analyzeThumbnailsComprehensive(videos) {
+    const thumbnailScores = videos.map(video => this.analyzeThumbnailComprehensive(video.thumbnails));
+    const averageScore = thumbnailScores.reduce((sum, analysis) => sum + analysis.score, 0) / thumbnailScores.length || 0;
     
     return {
-      score: Math.min(score, 100),
-      length: title.length,
-      hasNumbers: /\d/.test(title),
-      hasPowerWords: powerWords.some(word => title.toLowerCase().includes(word)),
-      isQuestion: title.includes('?'),
-      naturalLanguage: title.toLowerCase().includes('how to') || title.toLowerCase().includes('what is')
+      averageScore,
+      thumbnailAnalyses: thumbnailScores,
+      customThumbnailsDetected: thumbnailScores.filter(analysis => analysis.hasMaxRes).length
     };
   }
 
-  analyzeDescriptionComprehensive(description) {
-    if (!description) return { score: 0, issues: ['No description provided'] };
-    
-    let score = 0;
-    const issues = [];
-    const strengths = [];
-    
-    // Length
-    if (description.length >= 200) {
-      score += 25;
-      strengths.push('Good description length');
-    } else {
-      issues.push('Description too short (aim for 200+ characters)');
-    }
-    
-    // Links
-    if (description.includes('http')) {
-      score += 15;
-      strengths.push('Contains links');
-    } else {
-      issues.push('No links to additional resources');
-    }
-    
-    // Structure
-    if (description.includes('\n')) {
-      score += 15;
-      strengths.push('Well-structured with line breaks');
-    }
-    
-    // Timestamps
-    if (/\d+:\d+/.test(description)) {
-      score += 20;
-      strengths.push('Includes timestamps');
-    } else {
-      issues.push('No timestamps for navigation');
-    }
-    
-    // Call to action
-    const cta = ['subscribe', 'like', 'comment', 'share', 'bell'];
-    if (cta.some(word => description.toLowerCase().includes(word))) {
-      score += 15;
-      strengths.push('Has call-to-action');
-    } else {
-      issues.push('Missing call-to-action');
-    }
-    
-    // Social media
-    if (description.includes('twitter') || description.includes('instagram')) {
-      score += 10;
-      strengths.push('Links to social media');
-    }
-    
-    return {
-      score: Math.min(score, 100),
-      length: description.length,
-      hasLinks: description.includes('http'),
-      hasTimestamps: /\d+:\d+/.test(description),
-      hasCallToAction: cta.some(word => description.toLowerCase().includes(word)),
-      strengths,
-      issues
-    };
-  }
-
-  analyzeTagsComprehensive(tags) {
-    if (!tags || tags.length === 0) {
-      return { 
-        score: 0, 
-        count: 0, 
-        issues: ['No tags provided'],
-        recommendations: ['Add 8-15 relevant tags per video']
-      };
-    }
-    
-    let score = 0;
-    const issues = [];
-    const strengths = [];
-    
-    // Quantity
-    if (tags.length >= 8 && tags.length <= 15) {
-      score += 40;
-      strengths.push('Good tag quantity');
-    } else if (tags.length >= 5) {
-      score += 25;
-      issues.push('Could use more tags (aim for 8-15)');
-    } else {
-      issues.push('Too few tags (minimum 5 recommended)');
-    }
-    
-    // Variety
-    const shortTags = tags.filter(tag => tag.length <= 15).length;
-    const longTags = tags.filter(tag => tag.length > 15).length;
-    if (shortTags > 0 && longTags > 0) {
-      score += 20;
-      strengths.push('Good mix of short and long-tail tags');
-    }
-    
-    // Specificity
-    if (tags.some(tag => tag.includes(' '))) {
-      score += 20;
-      strengths.push('Includes long-tail keywords');
-    }
-    
-    // Relevance indicators
-    if (tags.some(tag => tag.length > 20)) {
-      score += 20;
-      strengths.push('Has specific/niche tags');
-    }
-    
-    return {
-      score: Math.min(score, 100),
-      count: tags.length,
-      hasVariety: shortTags > 0 && longTags > 0,
-      hasLongTail: tags.some(tag => tag.includes(' ')),
-      strengths,
-      issues,
-      recommendations: this.getTagRecommendations(tags.length)
-    };
-  }
-
-  getTagRecommendations(tagCount) {
-    if (tagCount === 0) return ['Add relevant tags to improve discoverability'];
-    if (tagCount < 5) return ['Add more tags (aim for 8-15 total)'];
-    if (tagCount > 15) return ['Too many tags may dilute relevance'];
-    return ['Good tag count - ensure they are all relevant'];
-  }
-
-  analyzeThumbnailComprehensive(thumbnails) {
-    if (!thumbnails) return { score: 30, issues: ['No thumbnail data available'] };
-    
-    let score = 60; // Base score for having thumbnails
-    const strengths = [];
-    
-    if (thumbnails.high) {
-      score += 20;
-      strengths.push('High resolution available');
-    }
-    
-    if (thumbnails.maxres) {
-      score += 20;
-      strengths.push('Maximum resolution available');
-    }
-    
-    return {
-      score: Math.min(score, 100),
-      hasHighRes: !!thumbnails.high,
-      hasMaxRes: !!thumbnails.maxres,
-      strengths,
-      recommendations: ['Consider custom thumbnails for better click-through rates']
-    };
-  }
-
-  // CONTENT QUALITY HELPERS
-  detectHook(title, description) {
-    const hookWords = ['ultimate', 'secret', 'mistake', 'never', 'always', 'best', 'worst', 'shocking'];
-    const titleHook = hookWords.some(word => title.toLowerCase().includes(word));
-    const descHook = description.toLowerCase().includes('in this video') || description.toLowerCase().includes('today we');
-    return titleHook || descHook;
-  }
-
-  detectTimestamps(description) {
-    return /\d+:\d+/.test(description) && description.includes('\n');
-  }
-
-  detectCallToAction(description) {
-    const cta = ['subscribe', 'like', 'comment', 'share', 'bell', 'notification'];
-    return cta.some(word => description.toLowerCase().includes(word));
-  }
-
-  detectLinks(description) {
-    return /https?:\/\/[^\s]+/.test(description);
-  }
-
-  classifyVideoFormat(duration, title) {
-    if (duration < 60) return 'Short';
-    if (duration < 300) return 'Quick Tutorial';
-    if (duration < 1200) return 'Standard';
-    if (duration < 3600) return 'Long-form';
-    return 'Extended/Stream';
-  }
-
-  // CONTENT STRUCTURE ANALYSIS
-  analyzeContentStructure(description) {
-    if (!description) return { score: 0, hasStructure: false };
-    
-    let score = 0;
-    const hasLineBreaks = description.includes('\n');
-    const hasSections = description.split('\n').length > 3;
-    const hasTimestamps = /\d+:\d+/.test(description);
-    const hasHeaders = /^[A-Z][^a-z]*:/.test(description);
-    
-    if (hasLineBreaks) score += 25;
-    if (hasSections) score += 25;
-    if (hasTimestamps) score += 30;
-    if (hasHeaders) score += 20;
-    
-    return {
-      score: Math.min(score, 100),
-      hasStructure: score > 40,
-      hasLineBreaks,
-      hasSections,
-      hasTimestamps,
-      hasHeaders
-    };
-  }
-
-  // CONTENT STRUCTURE SET ANALYSIS
-  analyzeContentStructureSet(videos) {
-    const structureAnalysis = videos.map(video => this.analyzeContentStructure(video.description));
-    const averageScore = structureAnalysis.reduce((sum, analysis) => sum + analysis.score, 0) / structureAnalysis.length || 0;
-    
-    return {
-      score: averageScore,
-      videosWithStructure: structureAnalysis.filter(analysis => analysis.hasStructure).length,
-      videosWithTimestamps: structureAnalysis.filter(analysis => analysis.hasTimestamps).length
-    };
-  }
-
-  // HOOKS ANALYSIS
-  analyzeHooks(videos) {
-    const hookAnalysis = videos.map(video => {
-      const title = video.title.toLowerCase();
-      const description = video.description.toLowerCase();
-      
-      const hookWords = ['ultimate', 'secret', 'mistake', 'never', 'always', 'best', 'worst', 'shocking', 'amazing', 'incredible'];
-      const questionWords = ['how', 'what', 'why', 'when', 'where'];
-      const urgencyWords = ['now', 'today', 'immediately', 'urgent', 'breaking'];
-      
-      let hookScore = 0;
-      if (hookWords.some(word => title.includes(word))) hookScore += 30;
-      if (questionWords.some(word => title.startsWith(word))) hookScore += 25;
-      if (urgencyWords.some(word => title.includes(word))) hookScore += 20;
-      if (title.includes('?') || title.includes('!')) hookScore += 15;
-      if (/\d/.test(title)) hookScore += 10; // Numbers in title
-      
-      return Math.min(hookScore, 100);
-    });
-    
-    const averageScore = hookAnalysis.reduce((sum, score) => sum + score, 0) / hookAnalysis.length || 0;
-    
-    return {
-      score: averageScore,
-      videosWithHooks: hookAnalysis.filter(score => score > 50).length,
-      averageHookScore: averageScore,
-      recommendations: averageScore < 60 ? ['Use more engaging titles with questions, numbers, or power words'] : []
-    };
-  }
-
-  // CALLS TO ACTION ANALYSIS
-  analyzeCallsToAction(videos) {
-    const ctaAnalysis = videos.map(video => {
-      const description = video.description.toLowerCase();
-      
-      const ctaWords = ['subscribe', 'like', 'comment', 'share', 'bell', 'notification', 'follow', 'join'];
-      const foundCTAs = ctaWords.filter(word => description.includes(word));
-      
-      let score = foundCTAs.length * 15;
-      if (description.includes('subscribe') && description.includes('bell')) score += 20;
-      if (description.includes('comment below')) score += 10;
-      if (description.includes('share') && description.includes('friends')) score += 10;
-      
-      return Math.min(score, 100);
-    });
-    
-    const averageScore = ctaAnalysis.reduce((sum, score) => sum + score, 0) / ctaAnalysis.length || 0;
-    
-    return {
-      score: averageScore,
-      videosWithCTA: ctaAnalysis.filter(score => score > 30).length,
-      averageCTAScore: averageScore,
-      recommendations: averageScore < 50 ? ['Add clear calls-to-action in video descriptions'] : []
-    };
-  }
-
-  // PROFESSIONAL QUALITY ANALYSIS
-  analyzeProfessionalQuality(videos) {
-    const qualityAnalysis = videos.map(video => {
-      let score = 50; // Base score
-      
-      // Title quality
-      const title = video.title;
-      if (title.length >= 30 && title.length <= 60) score += 15;
-      if (!/ALL CAPS/.test(title) && title !== title.toUpperCase()) score += 10;
-      
-      // Description quality
-      const description = video.description;
-      if (description && description.length >= 200) score += 15;
-      if (description && description.includes('http')) score += 5;
-      
-      // Tags
-      if (video.tags && video.tags.length >= 5) score += 5;
-      
-      return Math.min(score, 100);
-    });
-    
-    const averageScore = qualityAnalysis.reduce((sum, score) => sum + score, 0) / qualityAnalysis.length || 0;
-    
-    return {
-      score: averageScore,
-      indicators: {
-        properTitleLength: qualityAnalysis.filter((_, i) => {
-          const title = videos[i].title;
-          return title.length >= 30 && title.length <= 60;
-        }).length,
-        adequateDescriptions: qualityAnalysis.filter((_, i) => {
-          return videos[i].description && videos[i].description.length >= 200;
-        }).length
-      }
-    };
-  }
-
-  // PLAYLIST ORGANIZATION ANALYSIS
   analyzePlaylistOrganization(playlists) {
     if (!playlists || playlists.length === 0) {
       return {
@@ -1087,7 +1323,7 @@ class YouTubeChannelAnalyzer {
       };
     }
     
-    let score = 20; // Base score for having playlists
+    let score = 20;
     
     if (playlists.length >= 3) score += 30;
     if (playlists.length >= 5) score += 20;
@@ -1107,7 +1343,6 @@ class YouTubeChannelAnalyzer {
     };
   }
 
-  // BINGE WATCHING POTENTIAL ANALYSIS
   analyzeBingeWatchingPotential(playlists) {
     if (!playlists || playlists.length === 0) {
       return {
@@ -1145,7 +1380,6 @@ class YouTubeChannelAnalyzer {
     };
   }
 
-  // THEMATIC GROUPING ANALYSIS
   analyzeThematicGrouping(playlists, videos) {
     if (!playlists || playlists.length === 0) {
       return {
@@ -1187,63 +1421,11 @@ class YouTubeChannelAnalyzer {
     };
   }
 
-  // TITLES COMPREHENSIVE ANALYSIS
-  analyzeTitlesComprehensive(videos) {
-    const titleScores = videos.map(video => this.analyzeTitleComprehensive(video.title));
-    const averageScore = titleScores.reduce((sum, analysis) => sum + analysis.score, 0) / titleScores.length || 0;
-    
-    return {
-      averageScore,
-      titleAnalyses: titleScores,
-      strengths: this.identifyTitleStrengths(titleScores),
-      weaknesses: this.identifyTitleWeaknesses(titleScores)
-    };
-  }
-
-  // DESCRIPTIONS COMPREHENSIVE ANALYSIS
-  analyzeDescriptionsComprehensive(videos) {
-    const descriptionScores = videos.map(video => this.analyzeDescriptionComprehensive(video.description));
-    const averageScore = descriptionScores.reduce((sum, analysis) => sum + analysis.score, 0) / descriptionScores.length || 0;
-    
-    return {
-      averageScore,
-      descriptionAnalyses: descriptionScores,
-      strengths: this.identifyDescriptionStrengths(descriptionScores),
-      weaknesses: this.identifyDescriptionWeaknesses(descriptionScores)
-    };
-  }
-
-  // TAGS SET COMPREHENSIVE ANALYSIS
-  analyzeTagsSetComprehensive(videos) {
-    const tagScores = videos.map(video => this.analyzeTagsComprehensive(video.tags));
-    const averageScore = tagScores.reduce((sum, analysis) => sum + analysis.score, 0) / tagScores.length || 0;
-    
-    return {
-      averageScore,
-      tagAnalyses: tagScores,
-      strengths: this.identifyTagStrengths(tagScores),
-      weaknesses: this.identifyTagWeaknesses(tagScores)
-    };
-  }
-
-  // THUMBNAILS COMPREHENSIVE ANALYSIS
-  analyzeThumbnailsComprehensive(videos) {
-    const thumbnailScores = videos.map(video => this.analyzeThumbnailComprehensive(video.thumbnails));
-    const averageScore = thumbnailScores.reduce((sum, analysis) => sum + analysis.score, 0) / thumbnailScores.length || 0;
-    
-    return {
-      averageScore,
-      thumbnailAnalyses: thumbnailScores,
-      customThumbnailsDetected: thumbnailScores.filter(analysis => analysis.hasMaxRes).length
-    };
-  }
-
-  // COMMENT QUALITY ANALYSIS
   analyzeCommentQuality(videos) {
     const commentRatios = videos.map(v => v.commentToViewRatio);
     const avgCommentRatio = commentRatios.reduce((sum, r) => sum + r, 0) / commentRatios.length || 0;
     
-    let qualityScore = Math.min(avgCommentRatio * 50, 100); // 2% = 100 points
+    let qualityScore = Math.min(avgCommentRatio * 50, 100);
     
     return {
       qualityScore,
@@ -1252,7 +1434,6 @@ class YouTubeChannelAnalyzer {
     };
   }
 
-  // ENGAGEMENT CONSISTENCY ANALYSIS
   analyzeEngagementConsistency(videos) {
     const engagementRates = videos.map(v => v.engagementRate);
     const avgEngagement = engagementRates.reduce((sum, rate) => sum + rate, 0) / engagementRates.length || 0;
@@ -1329,6 +1510,190 @@ class YouTubeChannelAnalyzer {
     if (fewTags > tagScores.length * 0.5) weaknesses.push('Insufficient tag usage');
     
     return weaknesses;
+  }
+
+  // HELPER METHODS FOR PATTERNS AND ISSUES
+  identifyTitlePatterns(highPerforming, lowPerforming) {
+    const highAvgLength = highPerforming.reduce((sum, v) => sum + v.title.length, 0) / highPerforming.length;
+    const lowAvgLength = lowPerforming.reduce((sum, v) => sum + v.title.length, 0) / lowPerforming.length;
+    
+    return {
+      observation: `High performing videos average ${highAvgLength.toFixed(0)} characters vs ${lowAvgLength.toFixed(0)} for low performing`,
+      sample: "Pattern observed in current data set"
+    };
+  }
+
+  identifyTitleIssues(titleScores) {
+    const issues = [];
+    const shortTitles = titleScores.filter(t => t.length < 30).length;
+    const veryLongTitles = titleScores.filter(t => t.length > 70).length;
+    
+    if (shortTitles > 0) issues.push(`${shortTitles} titles under 30 characters`);
+    if (veryLongTitles > 0) issues.push(`${veryLongTitles} titles over 70 characters`);
+    
+    return issues;
+  }
+
+  identifyDescriptionIssues(descriptionScores, videos) {
+    const issues = [];
+    const emptyDescs = descriptionScores.filter(d => d.length < 50).length;
+    const noTimestamps = descriptionScores.filter(d => !d.hasTimestamps).length;
+    
+    if (emptyDescs > 0) issues.push(`${emptyDescs} videos with minimal descriptions`);
+    if (noTimestamps > videos.length * 0.8) issues.push(`${noTimestamps} videos missing timestamps`);
+    
+    return issues;
+  }
+
+  analyzeLikePatterns(videos) {
+    const videosWithCTA = videos.filter(v => 
+      v.description && v.description.toLowerCase().includes('like')
+    ).length;
+    
+    return `${videosWithCTA} out of ${videos.length} videos mention likes in descriptions`;
+  }
+
+  identifyEngagementPositives(viewsToSubsRatio, avgLikeRatio, commentAnalysis) {
+    const positives = [];
+    
+    if (viewsToSubsRatio > 15) positives.push('Strong subscriber engagement');
+    if (avgLikeRatio > 2) positives.push('Good like rates');
+    if (commentAnalysis.qualityScore > 70) positives.push('Active comment community');
+    
+    return positives.length > 0 ? positives : ['Room for improvement across all metrics'];
+  }
+
+  // EXPLANATION METHODS
+  explainSEOScore(overallScore, titleAnalysis, descriptionAnalysis, tagsAnalysis) {
+    const explanations = [];
+    
+    if (titleAnalysis.averageScore < 60) {
+      explanations.push(`Title optimization is weak (${titleAnalysis.averageScore.toFixed(1)}/100) - affecting 30% of overall SEO score`);
+    }
+    
+    if (descriptionAnalysis.averageScore < 60) {
+      explanations.push(`Description quality is poor (${descriptionAnalysis.averageScore.toFixed(1)}/100) - affecting 30% of overall SEO score`);
+    }
+    
+    if (tagsAnalysis.averageScore < 20) {
+      explanations.push(`Tag strategy is almost non-existent (${tagsAnalysis.averageScore.toFixed(1)}/100) - severely impacting discoverability`);
+    }
+    
+    const primaryIssue = tagsAnalysis.averageScore < 20 ? "tags" : 
+                        titleAnalysis.averageScore < descriptionAnalysis.averageScore ? "titles" : "descriptions";
+    
+    return {
+      score: overallScore,
+      grade: this.getScoreGrade(overallScore),
+      primaryIssue: primaryIssue,
+      explanations: explanations,
+      quickWin: this.identifyQuickSEOWin(titleAnalysis, descriptionAnalysis, tagsAnalysis)
+    };
+  }
+
+  explainEngagementScore(overallScore, viewsToSubsRatio, avgLikeRatio, commentAnalysis) {
+    const issues = [];
+    
+    if (viewsToSubsRatio < 8) {
+      issues.push(`Views-to-subscribers ratio is low (${viewsToSubsRatio.toFixed(1)}%) - subscribers aren't watching`);
+    }
+    
+    if (avgLikeRatio < 1.5) {
+      issues.push(`Like ratio is below benchmark (${avgLikeRatio.toFixed(2)}% vs 2-4% ideal)`);
+    }
+    
+    if (commentAnalysis.qualityScore < 50) {
+      issues.push(`Comment engagement is weak (${commentAnalysis.qualityScore.toFixed(1)}/100)`);
+    }
+    
+    const primaryConcern = viewsToSubsRatio < 5 ? "subscriber engagement" :
+                          avgLikeRatio < 1 ? "like engagement" : "overall engagement";
+    
+    return {
+      score: overallScore,
+      grade: this.getScoreGrade(overallScore),
+      primaryConcern: primaryConcern,
+      issues: issues,
+      positives: this.identifyEngagementPositives(viewsToSubsRatio, avgLikeRatio, commentAnalysis)
+    };
+  }
+
+  explainContentQualityScore(overallScore, hookAnalysis, structureAnalysis, ctaAnalysis) {
+    const weakestAreas = [];
+    
+    if (hookAnalysis.score < 50) weakestAreas.push('hooks');
+    if (structureAnalysis.score < 50) weakestAreas.push('structure');
+    if (ctaAnalysis.score < 50) weakestAreas.push('calls-to-action');
+    
+    return {
+      score: overallScore,
+      grade: this.getScoreGrade(overallScore),
+      weakestArea: weakestAreas.length > 0 ? weakestAreas[0] : 'overall optimization',
+      issues: weakestAreas
+    };
+  }
+
+  explainTagsScore(score, noTagsCount, avgTagCount) {
+    if (noTagsCount > 0) {
+      return {
+        reason: `${noTagsCount} videos have zero tags`,
+        impact: "YouTube cannot properly categorize these videos",
+        urgency: "Critical - fix immediately"
+      };
+    } else if (avgTagCount < 5) {
+      return {
+        reason: `Average of only ${avgTagCount.toFixed(1)} tags per video`,
+        impact: "Missing opportunities for discovery",
+        urgency: "High - expand tag strategy"
+      };
+    } else {
+      return {
+        reason: "Good tag usage detected",
+        impact: "Videos are properly categorized",
+        urgency: "Low - maintain current approach"
+      };
+    }
+  }
+
+  identifyQuickSEOWin(titleAnalysis, descriptionAnalysis, tagsAnalysis) {
+    if (tagsAnalysis.videosWithNoTagsCount > 0) {
+      return {
+        action: "Add tags to videos with zero tags",
+        effort: "Low (15 minutes)",
+        impact: "High",
+        specifics: `${tagsAnalysis.videosWithNoTagsCount} videos need immediate tag addition`
+      };
+    } else if (titleAnalysis.averageLength < 35) {
+      return {
+        action: "Extend short titles",
+        effort: "Medium (5 min per video)",
+        impact: "Medium-High",
+        specifics: "Focus on titles under 30 characters first"
+      };
+    } else if (descriptionAnalysis.hasTimestampsPercentage < 30) {
+      return {
+        action: "Add timestamps to long videos",
+        effort: "Medium (10 min per video)",
+        impact: "Medium",
+        specifics: "Prioritize videos over 8 minutes"
+      };
+    } else {
+      return {
+        action: "Optimize thumbnail consistency",
+        effort: "High",
+        impact: "Medium",
+        specifics: "Create custom thumbnails with consistent branding"
+      };
+    }
+  }
+
+  getScoreGrade(score) {
+    if (score >= 90) return '🏆 Excellent';
+    if (score >= 80) return '🥇 Very Good';
+    if (score >= 70) return '🥈 Good';
+    if (score >= 60) return '🥉 Fair';
+    if (score >= 50) return '⚠️ Needs Improvement';
+    return '❌ Poor';
   }
 
   // RECOMMENDATION GENERATORS
@@ -1514,7 +1879,6 @@ class YouTubeChannelAnalyzer {
       ...analysisResults.playlists.recommendations
     ];
     
-    // Sort by priority and return top recommendations
     const priorityOrder = { 'High': 3, 'Medium': 2, 'Low': 1 };
     
     return allRecommendations
@@ -1522,204 +1886,23 @@ class YouTubeChannelAnalyzer {
       .slice(0, 10);
   }
 
-  async writeToSheets(analysis) {
-    console.log('📝 Writing comprehensive results to Google Sheets...');
+  generateHookRecommendations(averageScore, weakHooksCount, totalVideos) {
+    const recommendations = [];
     
-    const sheetId = process.env.GOOGLE_SHEET_ID;
-    if (!sheetId) {
-      console.log('⚠️ No Google Sheet ID provided, skipping sheet update');
-      return;
+    if (averageScore < 60) {
+      recommendations.push('Use more engaging titles with questions, numbers, or power words');
     }
-
-    try {
-      // Clear existing data and write comprehensive analysis
-      await this.sheets.spreadsheets.values.clear({
-        spreadsheetId: sheetId,
-        range: 'A1:Z1000'
-      });
-
-      const values = [
-        ['🎥 COMPREHENSIVE YOUTUBE CHANNEL ANALYSIS', '', '', '', ''],
-        ['Generated:', new Date().toLocaleString(), '', '', ''],
-        ['', '', '', '', ''],
-        
-        // CHANNEL OVERVIEW
-        ['📊 CHANNEL OVERVIEW', '', '', '', ''],
-        ['Channel Name', analysis.channel.name, '', '', ''],
-        ['Subscribers', analysis.channel.subscriberCount.toLocaleString(), '', '', ''],
-        ['Total Views', analysis.channel.totalViews.toLocaleString(), '', '', ''],
-        ['Video Count', analysis.channel.videoCount, '', '', ''],
-        ['Channel Age', Math.floor((Date.now() - new Date(analysis.channel.createdAt)) / (1000 * 60 * 60 * 24 * 365)) + ' years', '', '', ''],
-        ['Country', analysis.channel.country || 'Not specified', '', '', ''],
-        ['', '', '', '', ''],
-        
-        // OVERALL SCORES DASHBOARD
-        ['📈 OVERALL PERFORMANCE SCORES', '', '', '', ''],
-        ['Branding & Identity', `${analysis.overallScores.brandingScore.toFixed(1)}/100`, this.getScoreGrade(analysis.overallScores.brandingScore), '', ''],
-        ['Content Strategy', `${analysis.overallScores.contentStrategyScore.toFixed(1)}/100`, this.getScoreGrade(analysis.overallScores.contentStrategyScore), '', ''],
-        ['SEO & Metadata', `${analysis.overallScores.seoScore.toFixed(1)}/100`, this.getScoreGrade(analysis.overallScores.seoScore), '', ''],
-        ['Engagement Signals', `${analysis.overallScores.engagementScore.toFixed(1)}/100`, this.getScoreGrade(analysis.overallScores.engagementScore), '', ''],
-        ['Content Quality', `${analysis.overallScores.contentQualityScore.toFixed(1)}/100`, this.getScoreGrade(analysis.overallScores.contentQualityScore), '', ''],
-        ['Playlist Structure', `${analysis.overallScores.playlistScore.toFixed(1)}/100`, this.getScoreGrade(analysis.overallScores.playlistScore), '', ''],
-        ['', '', '', '', ''],
-        
-        // 1. BRANDING & IDENTITY ANALYSIS
-        ['🎨 1. CHANNEL BRANDING & IDENTITY', '', '', '', ''],
-        ['Channel Name Clarity', `${analysis.brandingIdentity.channelName.clarity}/100`, '', '', ''],
-        ['Channel Name Memorability', `${analysis.brandingIdentity.channelName.memorability}/100`, '', '', ''],
-        ['Niche Alignment', `${analysis.brandingIdentity.channelName.nicheAlignment}/100`, '', '', ''],
-        ['Profile Image Quality', `${analysis.brandingIdentity.visualIdentity.profileImageQuality}/100`, '', '', ''],
-        ['Banner Quality', `${analysis.brandingIdentity.visualIdentity.bannerQuality}/100`, '', '', ''],
-        ['About Section Score', `${analysis.brandingIdentity.aboutSection.descriptionLength} characters`, '', '', ''],
-        ['Has Website Links', analysis.brandingIdentity.aboutSection.hasWebsiteLinks ? '✅ Yes' : '❌ No', '', '', ''],
-        ['Has Social Links', analysis.brandingIdentity.aboutSection.hasSocialLinks ? '✅ Yes' : '❌ No', '', '', ''],
-        ['Upload Schedule Mentioned', analysis.brandingIdentity.aboutSection.uploadScheduleMentioned ? '✅ Yes' : '❌ No', '', '', ''],
-        ['', '', '', '', ''],
-        
-        // 2. CONTENT STRATEGY & CONSISTENCY
-        ['📅 2. CONTENT STRATEGY & CONSISTENCY', '', '', '', ''],
-        ['Upload Frequency', analysis.contentStrategy.uploadPattern.frequency, '', '', ''],
-        ['Upload Consistency', `${analysis.contentStrategy.uploadPattern.consistencyScore.toFixed(1)}%`, '', '', ''],
-        ['Average Days Between Uploads', analysis.contentStrategy.uploadPattern.averageDaysBetween.toFixed(1), '', '', ''],
-        ['Last Upload', analysis.contentStrategy.uploadPattern.lastUpload, '', '', ''],
-        ['Primary Content Themes', analysis.contentStrategy.contentThemes.primaryThemes.slice(0, 3).map(t => t.theme).join(', '), '', '', ''],
-        ['Theme Consistency', `${analysis.contentStrategy.contentThemes.themeConsistency.toFixed(1)}%`, '', '', ''],
-        ['', '', '', '', ''],
-        ['Video Format Distribution:', '', '', '', ''],
-        ['Shorts (<1 min)', `${analysis.contentStrategy.videoFormats.distribution.shorts.toFixed(1)}%`, '', '', ''],
-        ['Medium (1-10 min)', `${analysis.contentStrategy.videoFormats.distribution.medium.toFixed(1)}%`, '', '', ''],
-        ['Long-form (10+ min)', `${analysis.contentStrategy.videoFormats.distribution.long.toFixed(1)}%`, '', '', ''],
-        ['Target Audience', analysis.contentStrategy.targetAudience.primaryAudience, '', '', ''],
-        ['', '', '', '', ''],
-        
-        // 3. SEO & METADATA ANALYSIS
-        ['🔍 3. SEO & METADATA ANALYSIS', '', '', '', ''],
-        ['Overall SEO Score', `${analysis.seoMetadata.overallScore.toFixed(1)}/100`, '', '', ''],
-        ['Title Optimization', `${analysis.seoMetadata.titles.averageScore.toFixed(1)}/100`, '', '', ''],
-        ['Description Quality', `${analysis.seoMetadata.descriptions.averageScore.toFixed(1)}/100`, '', '', ''],
-        ['Tags Effectiveness', `${analysis.seoMetadata.tags.averageScore.toFixed(1)}/100`, '', '', ''],
-        ['Thumbnail Quality', `${analysis.seoMetadata.thumbnails.averageScore.toFixed(1)}/100`, '', '', ''],
-        ['', '', '', '', ''],
-        
-        // 4. ENGAGEMENT SIGNALS
-        ['💬 4. ENGAGEMENT SIGNALS', '', '', '', ''],
-        ['Views-to-Subscribers Ratio', `${analysis.engagementSignals.viewsToSubscribers.ratio.toFixed(1)}%`, analysis.engagementSignals.viewsToSubscribers.benchmark, '', ''],
-        ['Like-to-View Ratio', `${analysis.engagementSignals.likeEngagement.averageRatio.toFixed(2)}%`, analysis.engagementSignals.likeEngagement.benchmark, '', ''],
-        ['Comment Engagement', `${analysis.engagementSignals.commentEngagement.qualityScore.toFixed(1)}/100`, '', '', ''],
-        ['Engagement Consistency', `${analysis.engagementSignals.consistency.toFixed(1)}%`, '', '', ''],
-        ['', '', '', '', ''],
-        
-        // 5. CONTENT QUALITY & WATCHABILITY
-        ['🎬 5. CONTENT QUALITY & WATCHABILITY', '', '', '', ''],
-        ['Hook Effectiveness', `${analysis.contentQuality.hooks.score.toFixed(1)}/100`, '', '', ''],
-        ['Content Structure', `${analysis.contentQuality.structure.score.toFixed(1)}/100`, '', '', ''],
-        ['Calls to Action', `${analysis.contentQuality.callsToAction.score.toFixed(1)}/100`, '', '', ''],
-        ['Professional Quality', `${analysis.contentQuality.professionalQuality.score.toFixed(1)}/100`, '', '', ''],
-        ['', '', '', '', ''],
-        
-        // 6. PLAYLIST STRUCTURE
-        ['📚 6. PLAYLISTS & CHANNEL STRUCTURE', '', '', '', ''],
-        ['Playlist Organization', `${analysis.playlistStructure.organization.score.toFixed(1)}/100`, '', '', ''],
-        ['Binge-Watching Potential', analysis.playlistStructure.bingeWatching.potential, '', '', ''],
-        ['Thematic Grouping', `${analysis.playlistStructure.thematicGrouping.score.toFixed(1)}/100`, '', '', ''],
-        ['Total Playlists', analysis.playlistStructure.organization.hasPlaylists ? 
-          analysis.playlistStructure.organization.playlistCount || 'Multiple' : '0', '', '', ''],
-        ['', '', '', '', ''],
-        
-        // PRIORITY RECOMMENDATIONS
-        ['🎯 PRIORITY RECOMMENDATIONS', '', '', '', ''],
-        ...analysis.priorityRecommendations.slice(0, 10).map((rec, index) => [
-          `${index + 1}. ${rec.category}`,
-          rec.action,
-          rec.priority,
-          rec.impact || 'Medium',
-          ''
-        ]),
-        ['', '', '', '', ''],
-        
-        // DETAILED VIDEO ANALYSIS
-        ['📹 DETAILED VIDEO ANALYSIS (Recent 15 Videos)', '', '', '', ''],
-        ['Title', 'Views', 'Engagement %', 'SEO Score', 'Format'],
-        ...analysis.videos.slice(0, 15).map(video => [
-          video.title.length > 50 ? video.title.substring(0, 47) + '...' : video.title,
-          video.views.toLocaleString(),
-          `${video.engagementRate.toFixed(2)}%`,
-          `${((video.titleAnalysis.score + video.descriptionAnalysis.score + video.tagsAnalysis.score) / 3).toFixed(1)}/100`,
-          video.format
-        ]),
-        ['', '', '', '', ''],
-        
-        // CONTENT THEMES BREAKDOWN
-        ['🏷️ CONTENT THEMES BREAKDOWN', '', '', '', ''],
-        ['Theme', 'Frequency', 'Percentage', '', ''],
-        ...analysis.contentStrategy.contentThemes.primaryThemes.map(theme => [
-          theme.theme,
-          theme.frequency,
-          `${((theme.frequency / analysis.videos.length) * 100).toFixed(1)}%`,
-          '',
-          ''
-        ]),
-        ['', '', '', '', ''],
-        
-        // COMPETITIVE INSIGHTS
-        ['📊 PERFORMANCE BENCHMARKS', '', '', '', ''],
-        ['Metric', 'Your Channel', 'Industry Benchmark', 'Status', ''],
-        ['Upload Consistency', `${analysis.contentStrategy.uploadPattern.consistencyScore.toFixed(1)}%`, '80%+', 
-          analysis.contentStrategy.uploadPattern.consistencyScore >= 80 ? '✅ Good' : '⚠️ Needs Improvement', ''],
-        ['SEO Optimization', `${analysis.seoMetadata.overallScore.toFixed(1)}/100`, '75+', 
-          analysis.seoMetadata.overallScore >= 75 ? '✅ Good' : '⚠️ Needs Improvement', ''],
-        ['Engagement Rate', `${analysis.engagementSignals.overallScore.toFixed(1)}/100`, '70+', 
-          analysis.engagementSignals.overallScore >= 70 ? '✅ Good' : '⚠️ Needs Improvement', ''],
-        ['Content Quality', `${analysis.contentQuality.overallScore.toFixed(1)}/100`, '75+', 
-          analysis.contentQuality.overallScore >= 75 ? '✅ Good' : '⚠️ Needs Improvement', ''],
-        ['', '', '', '', ''],
-        
-        // NEXT STEPS
-        ['🚀 RECOMMENDED NEXT STEPS', '', '', '', ''],
-        ['Priority Level', 'Action Item', 'Expected Impact', 'Time Investment', ''],
-        ...this.generateNextSteps(analysis).map(step => [
-          step.priority,
-          step.action,
-          step.impact,
-          step.timeInvestment,
-          ''
-        ]),
-        ['', '', '', '', ''],
-        
-        // ANALYSIS METADATA
-        ['📋 ANALYSIS METADATA', '', '', '', ''],
-        ['Analysis Date', new Date(analysis.analysisDate).toLocaleDateString(), '', '', ''],
-        ['Videos Analyzed', analysis.videos.length, '', '', ''],
-        ['Data Sources', 'YouTube Data API v3, Channel Analytics', '', '', ''],
-        ['Analysis Version', '2.0 Comprehensive', '', '', '']
-      ];
-
-      await this.sheets.spreadsheets.values.update({
-        spreadsheetId: sheetId,
-        range: 'A1',
-        valueInputOption: 'RAW',
-        requestBody: { values }
-      });
-
-      console.log('✅ Comprehensive results written to Google Sheets successfully!');
-    } catch (error) {
-      console.error('❌ Failed to write to Google Sheets:', error.message);
+    
+    if (weakHooksCount > totalVideos * 0.5) {
+      recommendations.push('Focus on creating curiosity rather than just describing content');
     }
-  }
-
-  getScoreGrade(score) {
-    if (score >= 90) return '🏆 Excellent';
-    if (score >= 80) return '🥇 Very Good';
-    if (score >= 70) return '🥈 Good';
-    if (score >= 60) return '🥉 Fair';
-    if (score >= 50) return '⚠️ Needs Improvement';
-    return '❌ Poor';
+    
+    return recommendations;
   }
 
   generateNextSteps(analysis) {
     const steps = [];
     
-    // High Priority Items
     if (analysis.overallScores.seoScore < 70) {
       steps.push({
         priority: 'HIGH',
@@ -1765,7 +1948,278 @@ class YouTubeChannelAnalyzer {
       });
     }
     
-    return steps.slice(0, 8); // Top 8 recommendations
+    return steps.slice(0, 8);
+  }
+
+  identifyVideoIssues(video) {
+    const issues = [];
+    
+    if (!video.tags || video.tags.length === 0) issues.push('NO TAGS');
+    if (video.title.length < 30) issues.push('SHORT TITLE');
+    if (!video.description || video.description.length < 100) issues.push('POOR DESC');
+    if (video.titleAnalysis?.score < 50) issues.push('WEAK HOOK');
+    
+    return issues.length > 0 ? issues.join(', ') : '✅ Good';
+  }
+
+  async writeToSheets(analysis) {
+    console.log('📝 Writing comprehensive results with detailed insights to Google Sheets...');
+    
+    const sheetId = process.env.GOOGLE_SHEET_ID;
+    if (!sheetId) {
+      console.log('⚠️ No Google Sheet ID provided, skipping sheet update');
+      return;
+    }
+
+    try {
+      await this.sheets.spreadsheets.values.clear({
+        spreadsheetId: sheetId,
+        range: 'A1:Z1000'
+      });
+
+      const values = [
+        ['🎥 COMPREHENSIVE YOUTUBE CHANNEL ANALYSIS WITH DETAILED INSIGHTS', '', '', '', ''],
+        ['Generated:', new Date().toLocaleString(), '', '', ''],
+        ['', '', '', '', ''],
+        
+        ['📊 CHANNEL OVERVIEW', '', '', '', ''],
+        ['Channel Name', analysis.channel.name, '', '', ''],
+        ['Subscribers', analysis.channel.subscriberCount.toLocaleString(), '', '', ''],
+        ['Total Views', analysis.channel.totalViews.toLocaleString(), '', '', ''],
+        ['Video Count', analysis.channel.videoCount, '', '', ''],
+        ['Channel Age', Math.floor((Date.now() - new Date(analysis.channel.createdAt)) / (1000 * 60 * 60 * 24 * 365)) + ' years', '', '', ''],
+        ['Country', analysis.channel.country || 'Not specified', '', '', ''],
+        ['', '', '', '', ''],
+        
+        ['📈 OVERALL PERFORMANCE SCORES & EXPLANATIONS', '', '', '', ''],
+        ['Branding & Identity', `${analysis.overallScores.brandingScore.toFixed(1)}/100`, this.getScoreGrade(analysis.overallScores.brandingScore), '', ''],
+        ['Content Strategy', `${analysis.overallScores.contentStrategyScore.toFixed(1)}/100`, this.getScoreGrade(analysis.overallScores.contentStrategyScore), '', ''],
+        ['SEO & Metadata', `${analysis.overallScores.seoScore.toFixed(1)}/100`, this.getScoreGrade(analysis.overallScores.seoScore), '', ''],
+        ['  ↳ Primary Issue:', analysis.seoMetadata.scoreExplanation?.primaryIssue || 'Multiple factors', '', '', ''],
+        ['  ↳ Quick Win:', analysis.seoMetadata.scoreExplanation?.quickWin?.action || 'See recommendations', '', '', ''],
+        ['Engagement Signals', `${analysis.overallScores.engagementScore.toFixed(1)}/100`, this.getScoreGrade(analysis.overallScores.engagementScore), '', ''],
+        ['  ↳ Primary Concern:', analysis.engagementSignals.scoreExplanation?.primaryConcern || 'Overall engagement', '', '', ''],
+        ['Content Quality', `${analysis.overallScores.contentQualityScore.toFixed(1)}/100`, this.getScoreGrade(analysis.overallScores.contentQualityScore), '', ''],
+        ['  ↳ Weakest Area:', analysis.contentQuality.scoreExplanation?.weakestArea || 'Multiple areas', '', '', ''],
+        ['Playlist Structure', `${analysis.overallScores.playlistScore.toFixed(1)}/100`, this.getScoreGrade(analysis.overallScores.playlistScore), '', ''],
+        ['', '', '', '', ''],
+        
+        ['🔍 DETAILED SEO ANALYSIS & INSIGHTS', '', '', '', ''],
+        ['Overall SEO Score', `${analysis.seoMetadata.overallScore.toFixed(1)}/100`, analysis.seoMetadata.scoreExplanation?.grade || '', '', ''],
+        ['', '', '', '', ''],
+        ['WHY YOUR SEO SCORE IS LOW:', '', '', '', ''],
+        ...analysis.seoMetadata.scoreExplanation?.explanations?.map(exp => ['  • ' + exp, '', '', '', '']) || [],
+        ['', '', '', '', ''],
+        
+        ['🚨 CRITICAL SEO ISSUES FOUND:', '', '', '', ''],
+        ...analysis.seoMetadata.detailedInsights?.filter(insight => insight.severity === 'Critical').map(insight => [
+          `${insight.category}:`, insight.finding, '', '', ''
+        ]) || [],
+        ['', '', '', '', ''],
+        
+        ['⚠️ HIGH PRIORITY SEO ISSUES:', '', '', '', ''],
+        ...analysis.seoMetadata.detailedInsights?.filter(insight => insight.severity === 'High').map(insight => [
+          `${insight.category}:`, insight.finding, insight.solution, '', ''
+        ]) || [],
+        ['', '', '', '', ''],
+        
+        ['📝 TITLE ANALYSIS BREAKDOWN', '', '', '', ''],
+        ['Average Title Length', `${analysis.seoMetadata.titles.averageLength?.toFixed(1)} characters`, '', '', ''],
+        ['Optimal Length %', `${analysis.seoMetadata.titles.optimalLengthPercentage?.toFixed(1)}%`, 'Target: 80%+', '', ''],
+        ['Titles with Numbers', `${analysis.seoMetadata.titles.hasNumbersPercentage?.toFixed(1)}%`, 'Target: 60%+', '', ''],
+        ['Question-based Titles', `${analysis.seoMetadata.titles.isQuestionPercentage?.toFixed(1)}%`, 'Target: 30%+', '', ''],
+        ['Best Performing Title', analysis.seoMetadata.titles.bestPerformingTitle?.title.substring(0, 50) + '...', 
+          analysis.seoMetadata.titles.bestPerformingTitle?.views.toLocaleString() + ' views', '', ''],
+        ['Worst Performing Title', analysis.seoMetadata.titles.worstPerformingTitle?.title.substring(0, 50) + '...', 
+          analysis.seoMetadata.titles.worstPerformingTitle?.views.toLocaleString() + ' views', '', ''],
+        ['', '', '', '', ''],
+        
+        ['📄 DESCRIPTION ANALYSIS BREAKDOWN', '', '', '', ''],
+        ['Average Description Length', `${analysis.seoMetadata.descriptions.averageLength?.toFixed(0)} characters`, '', '', ''],
+        ['Videos with Adequate Length', `${analysis.seoMetadata.descriptions.adequateLengthPercentage?.toFixed(1)}%`, 'Target: 80%+', '', ''],
+        ['Videos with Links', `${analysis.seoMetadata.descriptions.hasLinksPercentage?.toFixed(1)}%`, 'Target: 70%+', '', ''],
+        ['Videos with Timestamps', `${analysis.seoMetadata.descriptions.hasTimestampsPercentage?.toFixed(1)}%`, 'Target: 50%+', '', ''],
+        ['Videos with CTAs', `${analysis.seoMetadata.descriptions.hasCTAPercentage?.toFixed(1)}%`, 'Target: 90%+', '', ''],
+        ['Videos with No Description', analysis.seoMetadata.descriptions.emptyDescriptionsCount || 0, 'Target: 0', '', ''],
+        ['', '', '', '', ''],
+        
+        ['🏷️ TAGS ANALYSIS BREAKDOWN', '', '', '', ''],
+        ['Average Tags per Video', analysis.seoMetadata.tags.averageTagCount?.toFixed(1), 'Target: 8-15', '', ''],
+        ['Videos with NO TAGS', analysis.seoMetadata.tags.videosWithNoTagsCount, 'Target: 0', '🚨 CRITICAL', ''],
+        ['Videos with Few Tags (<5)', analysis.seoMetadata.tags.videosWithFewTagsCount, '', '⚠️ WARNING', ''],
+        ['Videos with Good Tags (8-15)', analysis.seoMetadata.tags.videosWithGoodTagsCount, '', '✅ GOOD', ''],
+        ['% Videos Missing Tags', `${analysis.seoMetadata.tags.noTagsPercentage?.toFixed(1)}%`, 'Target: 0%', '', ''],
+        ['Total Unique Tags Used', analysis.seoMetadata.tags.totalUniqueTagsUsed, '', '', ''],
+        ['', '', '', '', ''],
+        
+        ['🎯 VIDEOS NEEDING IMMEDIATE TAG ATTENTION:', '', '', '', ''],
+        ['Video Title', 'Current Views', 'Tag Status', 'Priority', ''],
+        ...analysis.seoMetadata.tags.specificVideosNeedingTags?.map(video => [
+          video.title,
+          video.views.toLocaleString(),
+          'NO TAGS',
+          'HIGH',
+          ''
+        ]) || [],
+        ['', '', '', '', ''],
+        
+        ['💬 DETAILED ENGAGEMENT ANALYSIS & INSIGHTS', '', '', '', ''],
+        ['Overall Engagement Score', `${analysis.engagementSignals.overallScore.toFixed(1)}/100`, 
+          analysis.engagementSignals.scoreExplanation?.grade || '', '', ''],
+        ['Primary Concern', analysis.engagementSignals.scoreExplanation?.primaryConcern || 'Multiple factors', '', '', ''],
+        ['', '', '', '', ''],
+        
+        ['🔍 ENGAGEMENT ISSUES IDENTIFIED:', '', '', '', ''],
+        ...analysis.engagementSignals.detailedInsights?.map(insight => [
+          `${insight.category}:`, insight.finding, insight.solution, insight.severity, ''
+        ]) || [],
+        ['', '', '', '', ''],
+        
+        ['🎬 DETAILED CONTENT QUALITY ANALYSIS', '', '', '', ''],
+        ['Overall Content Quality Score', `${analysis.contentQuality.overallScore.toFixed(1)}/100`, 
+          this.getScoreGrade(analysis.contentQuality.overallScore), '', ''],
+        ['', '', '', '', ''],
+        
+        ['Hook Effectiveness Analysis:', '', '', '', ''],
+        ['Average Hook Score', `${analysis.contentQuality.hooks.score?.toFixed(1)}/100`, '', '', ''],
+        ['Videos with Strong Hooks', analysis.contentQuality.hooks.videosWithStrongHooks || 0, '', '', ''],
+        ['Videos with Weak Hooks', analysis.contentQuality.hooks.videosWithWeakHooks || 0, '', '⚠️ NEEDS WORK', ''],
+        ['Best Hook Example', analysis.contentQuality.hooks.bestExample?.videoTitle?.substring(0, 50) + '...' || 'N/A', '', '', ''],
+        ['Worst Hook Example', analysis.contentQuality.hooks.worstExample?.videoTitle?.substring(0, 50) + '...' || 'N/A', '', '', ''],
+        ['', '', '', '', ''],
+        
+        ['🎣 HOOK IMPROVEMENT INSIGHTS:', '', '', '', ''],
+        ...analysis.contentQuality.hooks.hookInsights?.map(insight => [
+          insight.finding, insight.impact, insight.pattern, '', ''
+        ]) || [],
+        ['', '', '', '', ''],
+        
+        ['🎯 PRIORITY RECOMMENDATIONS WITH DETAILED EXPLANATIONS', '', '', '', ''],
+        ['Priority', 'Action Item', 'Why This Matters', 'Expected Impact', 'Time Investment'],
+        ...analysis.priorityRecommendations.slice(0, 10).map((rec, index) => [
+          rec.priority || 'Medium',
+          `${index + 1}. ${rec.action}`,
+          rec.reasoning || 'Improves overall channel performance',
+          rec.impact || 'Medium',
+          rec.timeInvestment || 'Variable'
+        ]),
+        ['', '', '', '', ''],
+        
+        ['⚡ IMMEDIATE ACTION ITEMS (Do This Week)', '', '', '', ''],
+        ['Action', 'Specific Videos/Areas', 'Time Required', 'Expected Result', ''],
+        
+        ...(analysis.seoMetadata.tags.videosWithNoTagsCount > 0 ? [[
+          'Add tags to videos with zero tags',
+          `${analysis.seoMetadata.tags.videosWithNoTagsCount} videos identified`,
+          '2-3 hours total',
+          'Immediate discoverability improvement',
+          ''
+        ]] : []),
+        
+        ...(analysis.seoMetadata.titles.optimalLengthPercentage < 50 ? [[
+          'Extend short titles to 40-60 characters',
+          `${Math.round((1 - analysis.seoMetadata.titles.optimalLengthPercentage/100) * analysis.videos.length)} videos need work`,
+          '1-2 hours',
+          'Better SEO and click-through rates',
+          ''
+        ]] : []),
+        
+        ...(analysis.engagementSignals.viewsToSubscribers.ratio < 8 ? [[
+          'Improve subscriber engagement',
+          'Focus on notification bell and video hooks',
+          '30 min per video',
+          'Higher view counts from existing subscribers',
+          ''
+        ]] : []),
+        
+        ['', '', '', '', ''],
+        
+        ['📊 PERFORMANCE BENCHMARKS & INDUSTRY COMPARISON', '', '', '', ''],
+        ['Metric', 'Your Channel', 'Industry Benchmark', 'Status', 'Gap Analysis'],
+        ['Upload Consistency', `${analysis.contentStrategy?.uploadPattern?.consistencyScore?.toFixed(1)}%`, '80%+', 
+          analysis.contentStrategy?.uploadPattern?.consistencyScore >= 80 ? '✅ Good' : '⚠️ Needs Improvement',
+          analysis.contentStrategy?.uploadPattern?.consistencyScore < 80 ? 
+            `${(80 - analysis.contentStrategy.uploadPattern.consistencyScore).toFixed(1)}% below benchmark` : 'Meeting benchmark'],
+        ['SEO Optimization', `${analysis.seoMetadata.overallScore.toFixed(1)}/100`, '75+', 
+          analysis.seoMetadata.overallScore >= 75 ? '✅ Good' : '⚠️ Needs Improvement',
+          analysis.seoMetadata.overallScore < 75 ? 
+            `${(75 - analysis.seoMetadata.overallScore).toFixed(1)} points below benchmark` : 'Meeting benchmark'],
+        ['Engagement Rate', `${analysis.engagementSignals.overallScore.toFixed(1)}/100`, '70+', 
+          analysis.engagementSignals.overallScore >= 70 ? '✅ Good' : '⚠️ Needs Improvement',
+          analysis.engagementSignals.overallScore < 70 ? 
+            `${(70 - analysis.engagementSignals.overallScore).toFixed(1)} points below benchmark` : 'Meeting benchmark'],
+        ['Content Quality', `${analysis.contentQuality.overallScore.toFixed(1)}/100`, '75+', 
+          analysis.contentQuality.overallScore >= 75 ? '✅ Good' : '⚠️ Needs Improvement',
+          analysis.contentQuality.overallScore < 75 ? 
+            `${(75 - analysis.contentQuality.overallScore).toFixed(1)} points below benchmark` : 'Meeting benchmark'],
+        ['', '', '', '', ''],
+        
+        ['📹 DETAILED VIDEO ANALYSIS WITH INSIGHTS (Recent 15 Videos)', '', '', '', ''],
+        ['Title', 'Views', 'Tags Count', 'Title Length', 'Hook Score', 'Issues Found'],
+        ...analysis.videos.slice(0, 15).map(video => [
+          video.title.length > 40 ? video.title.substring(0, 37) + '...' : video.title,
+          video.views.toLocaleString(),
+          video.tags?.length || 0,
+          video.title.length,
+          video.titleAnalysis?.score?.toFixed(0) || 'N/A',
+          this.identifyVideoIssues(video)
+        ]),
+        ['', '', '', '', ''],
+        
+        ['🏷️ CONTENT THEMES BREAKDOWN', '', '', '', ''],
+        ['Theme', 'Frequency', 'Percentage', '', ''],
+        ...analysis.contentStrategy.contentThemes.primaryThemes.map(theme => [
+          theme.theme,
+          theme.frequency,
+          `${((theme.frequency / analysis.videos.length) * 100).toFixed(1)}%`,
+          '',
+          ''
+        ]),
+        ['', '', '', '', ''],
+        
+        ['🚀 RECOMMENDED NEXT STEPS', '', '', '', ''],
+        ['Priority Level', 'Action Item', 'Expected Impact', 'Time Investment', ''],
+        ...this.generateNextSteps(analysis).map(step => [
+          step.priority,
+          step.action,
+          step.impact,
+          step.timeInvestment,
+          ''
+        ]),
+        ['', '', '', '', ''],
+        
+        ['📋 ANALYSIS METADATA', '', '', '', ''],
+        ['Analysis Date', new Date(analysis.analysisDate).toLocaleDateString(), '', '', ''],
+        ['Videos Analyzed', analysis.videos.length, '', '', ''],
+        ['Analysis Depth', 'Comprehensive with Detailed Insights', '', '', ''],
+        ['Data Sources', 'YouTube Data API v3, Channel Analytics', '', '', ''],
+        ['Analysis Version', '3.0 Enhanced Insights', '', '', '']
+      ];
+
+      await this.sheets.spreadsheets.values.update({
+        spreadsheetId: sheetId,
+        range: 'A1',
+        valueInputOption: 'RAW',
+        requestBody: { values }
+      });
+
+      console.log('✅ Comprehensive results with detailed insights written to Google Sheets successfully!');
+    } catch (error) {
+      console.error('❌ Failed to write to Google Sheets:', error.message);
+    }
+  }
+
+  async saveResults(analysis) {
+    try {
+      await fs.mkdir('results', { recursive: true });
+      await fs.writeFile(
+        `results/analysis-${Date.now()}.json`,
+        JSON.stringify(analysis, null, 2)
+      );
+      console.log('📁 Results saved as artifact');
+    } catch (error) {
+      console.error('Failed to save results:', error);
+    }
   }
 
   async writeErrorToSheets(errorMessage) {
@@ -1793,19 +2247,6 @@ class YouTubeChannelAnalyzer {
       console.error('Failed to write error to sheets:', error);
     }
   }
-
-  async saveResults(analysis) {
-    try {
-      await fs.mkdir('results', { recursive: true });
-      await fs.writeFile(
-        `results/analysis-${Date.now()}.json`,
-        JSON.stringify(analysis, null, 2)
-      );
-      console.log('📁 Results saved as artifact');
-    } catch (error) {
-      console.error('Failed to save results:', error);
-    }
-  }
 }
 
 // Main execution
@@ -1826,7 +2267,7 @@ async function main() {
   
   try {
     await analyzer.analyzeChannel(channelUrl);
-    console.log('🎉 Analysis completed successfully!');
+    console.log('🎉 Enhanced analysis with detailed insights completed successfully!');
   } catch (error) {
     console.error('💥 Analysis failed:', error.message);
     process.exit(1);
