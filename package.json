@@ -1,1 +1,12 @@
-
+{
+  "name": "youtube-channel-auditor",
+  "version": "1.0.0",
+  "description": "Automated YouTube channel analysis tool",
+  "main": "src/analyze.js",
+  "dependencies": {
+    "googleapis": "^128.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
