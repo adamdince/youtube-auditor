@@ -429,7 +429,7 @@ class YouTubeChannelAnalyzer {
     const hookAnalysis = this.analyzeHooks(videos);
     
     // Structure Analysis
-    const structureAnalysis = this.analyzeContentStructure(videos);
+    const structureAnalysis = this.analyzeContentStructureSet(videos);
     
     // Call to Action Analysis
     const ctaAnalysis = this.analyzeCallsToAction(videos);
@@ -946,132 +946,580 @@ class YouTubeChannelAnalyzer {
     return 'Extended/Stream';
   }
 
-  analyzeTitleSEO(title) {
+  // CONTENT STRUCTURE ANALYSIS
+  analyzeContentStructure(description) {
+    if (!description) return { score: 0, hasStructure: false };
+    
     let score = 0;
-    if (title.length >= 30 && title.length <= 60) score += 25;
-    if (/\d/.test(title)) score += 20;
-    if (title.toLowerCase().includes('how to') || title.toLowerCase().includes('tutorial')) score += 20;
-    if (title.split(' ').length >= 5) score += 20;
-    if (title.includes('?') || title.includes('!')) score += 15;
-    return Math.min(score, 100);
+    const hasLineBreaks = description.includes('\n');
+    const hasSections = description.split('\n').length > 3;
+    const hasTimestamps = /\d+:\d+/.test(description);
+    const hasHeaders = /^[A-Z][^a-z]*:/.test(description);
+    
+    if (hasLineBreaks) score += 25;
+    if (hasSections) score += 25;
+    if (hasTimestamps) score += 30;
+    if (hasHeaders) score += 20;
+    
+    return {
+      score: Math.min(score, 100),
+      hasStructure: score > 40,
+      hasLineBreaks,
+      hasSections,
+      hasTimestamps,
+      hasHeaders
+    };
   }
 
-  analyzeDescriptionSEO(description) {
-    if (!description) return 0;
-    let score = 0;
-    if (description.length >= 200) score += 30;
-    if (description.includes('http')) score += 20;
-    if (description.includes('\n')) score += 15;
-    if (/\d+:\d+/.test(description)) score += 20; // Timestamps
-    if (description.toLowerCase().includes('subscribe')) score += 15;
-    return Math.min(score, 100);
+  // CONTENT STRUCTURE SET ANALYSIS
+  analyzeContentStructureSet(videos) {
+    const structureAnalysis = videos.map(video => this.analyzeContentStructure(video.description));
+    const averageScore = structureAnalysis.reduce((sum, analysis) => sum + analysis.score, 0) / structureAnalysis.length || 0;
+    
+    return {
+      score: averageScore,
+      videosWithStructure: structureAnalysis.filter(analysis => analysis.hasStructure).length,
+      videosWithTimestamps: structureAnalysis.filter(analysis => analysis.hasTimestamps).length
+    };
   }
 
-  analyzeTagsSEO(tags) {
-    if (!tags || tags.length === 0) return 0;
-    let score = 0;
-    if (tags.length >= 8) score += 40;
-    if (tags.length >= 15) score += 30;
-    if (tags.some(tag => tag.length > 15)) score += 30;
-    return Math.min(score, 100);
-  }
-
-  calculateUploadConsistency(videos) {
-    if (videos.length < 2) return 0;
-    
-    const dates = videos.map(v => new Date(v.publishedAt)).sort((a, b) => b - a);
-    const intervals = [];
-    
-    for (let i = 0; i < dates.length - 1; i++) {
-      const diff = (dates[i] - dates[i + 1]) / (1000 * 60 * 60 * 24);
-      intervals.push(diff);
-    }
-    
-    const avgInterval = intervals.reduce((sum, interval) => sum + interval, 0) / intervals.length;
-    const variance = intervals.reduce((sum, interval) => sum + Math.pow(interval - avgInterval, 2), 0) / intervals.length;
-    const stdDev = Math.sqrt(variance);
-    
-    return Math.max(0, (100 - stdDev * 2)) / 100;
-  }
-
-  extractContentThemes(videos) {
-    const allTags = videos.flatMap(v => v.tags);
-    const tagFreq = {};
-    
-    allTags.forEach(tag => {
-      tagFreq[tag] = (tagFreq[tag] || 0) + 1;
+  // HOOKS ANALYSIS
+  analyzeHooks(videos) {
+    const hookAnalysis = videos.map(video => {
+      const title = video.title.toLowerCase();
+      const description = video.description.toLowerCase();
+      
+      const hookWords = ['ultimate', 'secret', 'mistake', 'never', 'always', 'best', 'worst', 'shocking', 'amazing', 'incredible'];
+      const questionWords = ['how', 'what', 'why', 'when', 'where'];
+      const urgencyWords = ['now', 'today', 'immediately', 'urgent', 'breaking'];
+      
+      let hookScore = 0;
+      if (hookWords.some(word => title.includes(word))) hookScore += 30;
+      if (questionWords.some(word => title.startsWith(word))) hookScore += 25;
+      if (urgencyWords.some(word => title.includes(word))) hookScore += 20;
+      if (title.includes('?') || title.includes('!')) hookScore += 15;
+      if (/\d/.test(title)) hookScore += 10; // Numbers in title
+      
+      return Math.min(hookScore, 100);
     });
     
-    return Object.entries(tagFreq)
+    const averageScore = hookAnalysis.reduce((sum, score) => sum + score, 0) / hookAnalysis.length || 0;
+    
+    return {
+      score: averageScore,
+      videosWithHooks: hookAnalysis.filter(score => score > 50).length,
+      averageHookScore: averageScore,
+      recommendations: averageScore < 60 ? ['Use more engaging titles with questions, numbers, or power words'] : []
+    };
+  }
+
+  // CALLS TO ACTION ANALYSIS
+  analyzeCallsToAction(videos) {
+    const ctaAnalysis = videos.map(video => {
+      const description = video.description.toLowerCase();
+      
+      const ctaWords = ['subscribe', 'like', 'comment', 'share', 'bell', 'notification', 'follow', 'join'];
+      const foundCTAs = ctaWords.filter(word => description.includes(word));
+      
+      let score = foundCTAs.length * 15;
+      if (description.includes('subscribe') && description.includes('bell')) score += 20;
+      if (description.includes('comment below')) score += 10;
+      if (description.includes('share') && description.includes('friends')) score += 10;
+      
+      return Math.min(score, 100);
+    });
+    
+    const averageScore = ctaAnalysis.reduce((sum, score) => sum + score, 0) / ctaAnalysis.length || 0;
+    
+    return {
+      score: averageScore,
+      videosWithCTA: ctaAnalysis.filter(score => score > 30).length,
+      averageCTAScore: averageScore,
+      recommendations: averageScore < 50 ? ['Add clear calls-to-action in video descriptions'] : []
+    };
+  }
+
+  // PROFESSIONAL QUALITY ANALYSIS
+  analyzeProfessionalQuality(videos) {
+    const qualityAnalysis = videos.map(video => {
+      let score = 50; // Base score
+      
+      // Title quality
+      const title = video.title;
+      if (title.length >= 30 && title.length <= 60) score += 15;
+      if (!/ALL CAPS/.test(title) && title !== title.toUpperCase()) score += 10;
+      
+      // Description quality
+      const description = video.description;
+      if (description && description.length >= 200) score += 15;
+      if (description && description.includes('http')) score += 5;
+      
+      // Tags
+      if (video.tags && video.tags.length >= 5) score += 5;
+      
+      return Math.min(score, 100);
+    });
+    
+    const averageScore = qualityAnalysis.reduce((sum, score) => sum + score, 0) / qualityAnalysis.length || 0;
+    
+    return {
+      score: averageScore,
+      indicators: {
+        properTitleLength: qualityAnalysis.filter((_, i) => {
+          const title = videos[i].title;
+          return title.length >= 30 && title.length <= 60;
+        }).length,
+        adequateDescriptions: qualityAnalysis.filter((_, i) => {
+          return videos[i].description && videos[i].description.length >= 200;
+        }).length
+      }
+    };
+  }
+
+  // PLAYLIST ORGANIZATION ANALYSIS
+  analyzePlaylistOrganization(playlists) {
+    if (!playlists || playlists.length === 0) {
+      return {
+        score: 0,
+        hasPlaylists: false,
+        playlistCount: 0,
+        averageVideosPerPlaylist: 0
+      };
+    }
+    
+    let score = 20; // Base score for having playlists
+    
+    if (playlists.length >= 3) score += 30;
+    if (playlists.length >= 5) score += 20;
+    if (playlists.length >= 8) score += 20;
+    
+    const totalVideos = playlists.reduce((sum, playlist) => sum + (playlist.contentDetails?.itemCount || 0), 0);
+    const avgVideosPerPlaylist = totalVideos / playlists.length;
+    
+    if (avgVideosPerPlaylist >= 5) score += 10;
+    
+    return {
+      score: Math.min(score, 100),
+      hasPlaylists: true,
+      playlistCount: playlists.length,
+      averageVideosPerPlaylist: avgVideosPerPlaylist,
+      totalVideosInPlaylists: totalVideos
+    };
+  }
+
+  // BINGE WATCHING POTENTIAL ANALYSIS
+  analyzeBingeWatchingPotential(playlists) {
+    if (!playlists || playlists.length === 0) {
+      return {
+        score: 0,
+        potential: 'Low',
+        longestPlaylist: 0
+      };
+    }
+    
+    const playlistSizes = playlists.map(p => p.contentDetails?.itemCount || 0);
+    const longestPlaylist = Math.max(...playlistSizes);
+    const avgPlaylistSize = playlistSizes.reduce((sum, size) => sum + size, 0) / playlistSizes.length;
+    
+    let score = 0;
+    let potential = 'Low';
+    
+    if (longestPlaylist >= 10) {
+      score += 40;
+      potential = 'Medium';
+    }
+    if (longestPlaylist >= 20) {
+      score += 30;
+      potential = 'High';
+    }
+    if (avgPlaylistSize >= 8) {
+      score += 30;
+      potential = 'High';
+    }
+    
+    return {
+      score: Math.min(score, 100),
+      potential,
+      longestPlaylist,
+      averagePlaylistSize: avgPlaylistSize
+    };
+  }
+
+  // THEMATIC GROUPING ANALYSIS
+  analyzeThematicGrouping(playlists, videos) {
+    if (!playlists || playlists.length === 0) {
+      return {
+        score: 0,
+        themes: [],
+        coverage: 0
+      };
+    }
+    
+    const playlistTitles = playlists.map(p => p.snippet?.title || '').filter(title => title);
+    const themes = playlistTitles.map(title => {
+      const words = title.toLowerCase().split(' ');
+      return words.filter(word => word.length > 3);
+    }).flat();
+    
+    const uniqueThemes = [...new Set(themes)];
+    const themeFreq = {};
+    themes.forEach(theme => {
+      themeFreq[theme] = (themeFreq[theme] || 0) + 1;
+    });
+    
+    const topThemes = Object.entries(themeFreq)
       .sort(([,a], [,b]) => b - a)
       .slice(0, 5)
-      .map(([tag]) => tag);
+      .map(([theme, count]) => ({ theme, count }));
+    
+    let score = 30;
+    if (uniqueThemes.length >= 3) score += 35;
+    if (uniqueThemes.length >= 5) score += 35;
+    
+    const totalVideosInPlaylists = playlists.reduce((sum, p) => sum + (p.contentDetails?.itemCount || 0), 0);
+    const coverage = (totalVideosInPlaylists / videos.length) * 100;
+    
+    return {
+      score: Math.min(score, 100),
+      themes: topThemes,
+      coverage,
+      uniqueThemeCount: uniqueThemes.length
+    };
   }
 
-  analyzeBranding(channel) {
-    const snippet = channel.snippet;
-    let score = 0;
+  // TITLES COMPREHENSIVE ANALYSIS
+  analyzeTitlesComprehensive(videos) {
+    const titleScores = videos.map(video => this.analyzeTitleComprehensive(video.title));
+    const averageScore = titleScores.reduce((sum, analysis) => sum + analysis.score, 0) / titleScores.length || 0;
     
-    // Channel name quality
-    if (snippet.title.length >= 5 && snippet.title.length <= 50) score += 20;
-    
-    // Description quality
-    if (snippet.description && snippet.description.length >= 100) score += 20;
-    
-    // Profile image
-    if (snippet.thumbnails?.high) score += 20;
-    
-    // Custom URL
-    if (snippet.customUrl) score += 20;
-    
-    // Branding settings
-    if (channel.brandingSettings?.image?.bannerExternalUrl) score += 20;
-    
-    return score / 100;
+    return {
+      averageScore,
+      titleAnalyses: titleScores,
+      strengths: this.identifyTitleStrengths(titleScores),
+      weaknesses: this.identifyTitleWeaknesses(titleScores)
+    };
   }
 
-  generateRecommendations(metrics) {
+  // DESCRIPTIONS COMPREHENSIVE ANALYSIS
+  analyzeDescriptionsComprehensive(videos) {
+    const descriptionScores = videos.map(video => this.analyzeDescriptionComprehensive(video.description));
+    const averageScore = descriptionScores.reduce((sum, analysis) => sum + analysis.score, 0) / descriptionScores.length || 0;
+    
+    return {
+      averageScore,
+      descriptionAnalyses: descriptionScores,
+      strengths: this.identifyDescriptionStrengths(descriptionScores),
+      weaknesses: this.identifyDescriptionWeaknesses(descriptionScores)
+    };
+  }
+
+  // TAGS SET COMPREHENSIVE ANALYSIS
+  analyzeTagsSetComprehensive(videos) {
+    const tagScores = videos.map(video => this.analyzeTagsComprehensive(video.tags));
+    const averageScore = tagScores.reduce((sum, analysis) => sum + analysis.score, 0) / tagScores.length || 0;
+    
+    return {
+      averageScore,
+      tagAnalyses: tagScores,
+      strengths: this.identifyTagStrengths(tagScores),
+      weaknesses: this.identifyTagWeaknesses(tagScores)
+    };
+  }
+
+  // THUMBNAILS COMPREHENSIVE ANALYSIS
+  analyzeThumbnailsComprehensive(videos) {
+    const thumbnailScores = videos.map(video => this.analyzeThumbnailComprehensive(video.thumbnails));
+    const averageScore = thumbnailScores.reduce((sum, analysis) => sum + analysis.score, 0) / thumbnailScores.length || 0;
+    
+    return {
+      averageScore,
+      thumbnailAnalyses: thumbnailScores,
+      customThumbnailsDetected: thumbnailScores.filter(analysis => analysis.hasMaxRes).length
+    };
+  }
+
+  // COMMENT QUALITY ANALYSIS
+  analyzeCommentQuality(videos) {
+    const commentRatios = videos.map(v => v.commentToViewRatio);
+    const avgCommentRatio = commentRatios.reduce((sum, r) => sum + r, 0) / commentRatios.length || 0;
+    
+    let qualityScore = Math.min(avgCommentRatio * 50, 100); // 2% = 100 points
+    
+    return {
+      qualityScore,
+      averageCommentRatio: avgCommentRatio,
+      benchmark: avgCommentRatio > 1 ? 'Excellent' : avgCommentRatio > 0.5 ? 'Good' : 'Needs Improvement'
+    };
+  }
+
+  // ENGAGEMENT CONSISTENCY ANALYSIS
+  analyzeEngagementConsistency(videos) {
+    const engagementRates = videos.map(v => v.engagementRate);
+    const avgEngagement = engagementRates.reduce((sum, rate) => sum + rate, 0) / engagementRates.length || 0;
+    
+    const variance = engagementRates.reduce((sum, rate) => sum + Math.pow(rate - avgEngagement, 2), 0) / engagementRates.length;
+    const stdDev = Math.sqrt(variance);
+    
+    const consistencyScore = Math.max(0, 100 - (stdDev * 10));
+    
+    return consistencyScore;
+  }
+
+  // STRENGTH/WEAKNESS IDENTIFICATION HELPERS
+  identifyTitleStrengths(titleScores) {
+    const strengths = [];
+    const avgLength = titleScores.reduce((sum, t) => sum + t.length, 0) / titleScores.length;
+    const hasNumbersPercent = (titleScores.filter(t => t.hasNumbers).length / titleScores.length) * 100;
+    
+    if (avgLength >= 30 && avgLength <= 60) strengths.push('Good title length');
+    if (hasNumbersPercent > 60) strengths.push('Good use of numbers in titles');
+    
+    return strengths;
+  }
+
+  identifyTitleWeaknesses(titleScores) {
+    const weaknesses = [];
+    const avgLength = titleScores.reduce((sum, t) => sum + t.length, 0) / titleScores.length;
+    const lowScores = titleScores.filter(t => t.score < 60).length;
+    
+    if (avgLength < 30) weaknesses.push('Titles too short');
+    if (avgLength > 70) weaknesses.push('Titles too long');
+    if (lowScores > titleScores.length * 0.5) weaknesses.push('Many titles need SEO improvement');
+    
+    return weaknesses;
+  }
+
+  identifyDescriptionStrengths(descriptionScores) {
+    const strengths = [];
+    const hasLinksPercent = (descriptionScores.filter(d => d.hasLinks).length / descriptionScores.length) * 100;
+    const hasTimestampsPercent = (descriptionScores.filter(d => d.hasTimestamps).length / descriptionScores.length) * 100;
+    
+    if (hasLinksPercent > 70) strengths.push('Good use of links');
+    if (hasTimestampsPercent > 50) strengths.push('Good use of timestamps');
+    
+    return strengths;
+  }
+
+  identifyDescriptionWeaknesses(descriptionScores) {
+    const weaknesses = [];
+    const shortDescriptions = descriptionScores.filter(d => d.length < 200).length;
+    const noCTA = descriptionScores.filter(d => !d.hasCallToAction).length;
+    
+    if (shortDescriptions > descriptionScores.length * 0.5) weaknesses.push('Many descriptions too short');
+    if (noCTA > descriptionScores.length * 0.7) weaknesses.push('Missing calls-to-action');
+    
+    return weaknesses;
+  }
+
+  identifyTagStrengths(tagScores) {
+    const strengths = [];
+    const goodTagCount = tagScores.filter(t => t.count >= 8 && t.count <= 15).length;
+    
+    if (goodTagCount > tagScores.length * 0.7) strengths.push('Good tag quantity');
+    
+    return strengths;
+  }
+
+  identifyTagWeaknesses(tagScores) {
+    const weaknesses = [];
+    const noTags = tagScores.filter(t => t.count === 0).length;
+    const fewTags = tagScores.filter(t => t.count < 5).length;
+    
+    if (noTags > tagScores.length * 0.3) weaknesses.push('Many videos missing tags');
+    if (fewTags > tagScores.length * 0.5) weaknesses.push('Insufficient tag usage');
+    
+    return weaknesses;
+  }
+
+  // RECOMMENDATION GENERATORS
+  generateBrandingRecommendations(channelName, visualIdentity, aboutSection) {
     const recommendations = [];
     
-    if (metrics.seoScore < 70) {
-      recommendations.push("🎯 Improve SEO: Use better titles (30-60 chars), add timestamps to descriptions, and use 8-15 relevant tags per video");
+    if (channelName.clarity < 70) {
+      recommendations.push({
+        priority: 'Medium',
+        category: 'Channel Name',
+        action: 'Consider a clearer, more memorable channel name'
+      });
     }
     
-    if (metrics.uploadConsistency < 70) {
-      recommendations.push("📅 Upload Consistency: Establish a regular posting schedule (weekly/bi-weekly) to improve audience retention");
+    if (visualIdentity.bannerQuality < 70) {
+      recommendations.push({
+        priority: 'High',
+        category: 'Visual Identity',
+        action: 'Create a professional channel banner'
+      });
     }
     
-    if (metrics.brandingScore < 80) {
-      recommendations.push("🎨 Channel Branding: Add a professional banner, optimize channel description, and ensure consistent visual identity");
-    }
-    
-    if (metrics.playlistCount < 3) {
-      recommendations.push("📚 Create Playlists: Organize content into 5+ playlists to increase session duration and improve discoverability");
-    }
-    
-    if (metrics.avgEngagement < 3) {
-      recommendations.push("💬 Boost Engagement: Ask questions in videos, respond to comments, and add clear calls-to-action");
+    if (!aboutSection.hasWebsiteLinks) {
+      recommendations.push({
+        priority: 'Medium',
+        category: 'About Section',
+        action: 'Add website links to channel description'
+      });
     }
     
     return recommendations;
   }
 
-  identifyStrengths(seoScore, uploadConsistency, brandingScore, engagement) {
-    const strengths = [];
-    if (seoScore >= 80) strengths.push("Excellent SEO optimization");
-    if (uploadConsistency >= 80) strengths.push("Consistent upload schedule");
-    if (brandingScore >= 80) strengths.push("Strong channel branding");
-    if (engagement >= 4) strengths.push("High audience engagement");
-    return strengths.length > 0 ? strengths : ["Room for improvement in all areas"];
+  generateContentStrategyRecommendations(upload, themes, formats, audience) {
+    const recommendations = [];
+    
+    if (upload.consistencyScore < 70) {
+      recommendations.push({
+        priority: 'High',
+        category: 'Upload Schedule',
+        action: 'Establish a more consistent upload schedule'
+      });
+    }
+    
+    if (themes.clarityScore < 70) {
+      recommendations.push({
+        priority: 'Medium',
+        category: 'Content Focus',
+        action: 'Narrow down to 3-5 core content themes'
+      });
+    }
+    
+    return recommendations;
   }
 
-  identifyImprovements(seoScore, uploadConsistency, brandingScore, engagement) {
-    const improvements = [];
-    if (seoScore < 70) improvements.push("SEO optimization needed");
-    if (uploadConsistency < 70) improvements.push("More consistent uploads required");
-    if (brandingScore < 70) improvements.push("Channel branding needs work");
-    if (engagement < 3) improvements.push("Focus on audience engagement");
-    return improvements;
+  generateSEORecommendations(titles, descriptions, tags, thumbnails) {
+    const recommendations = [];
+    
+    if (titles.averageScore < 70) {
+      recommendations.push({
+        priority: 'High',
+        category: 'Title Optimization',
+        action: 'Improve title SEO with keywords and optimal length'
+      });
+    }
+    
+    if (descriptions.averageScore < 60) {
+      recommendations.push({
+        priority: 'High',
+        category: 'Description Quality',
+        action: 'Write longer, more detailed descriptions with timestamps'
+      });
+    }
+    
+    if (tags.averageScore < 50) {
+      recommendations.push({
+        priority: 'Medium',
+        category: 'Tag Strategy',
+        action: 'Use 8-15 relevant tags per video'
+      });
+    }
+    
+    return recommendations;
+  }
+
+  generateEngagementRecommendations(viewsScore, likeScore, commentAnalysis) {
+    const recommendations = [];
+    
+    if (viewsScore < 60) {
+      recommendations.push({
+        priority: 'High',
+        category: 'View Performance',
+        action: 'Focus on better thumbnails and titles to increase CTR'
+      });
+    }
+    
+    if (likeScore < 50) {
+      recommendations.push({
+        priority: 'Medium',
+        category: 'Like Engagement',
+        action: 'Ask viewers to like videos and provide value upfront'
+      });
+    }
+    
+    if (commentAnalysis.qualityScore < 50) {
+      recommendations.push({
+        priority: 'Medium',
+        category: 'Comment Engagement',
+        action: 'Ask questions and engage with comments to boost interaction'
+      });
+    }
+    
+    return recommendations;
+  }
+
+  generateContentQualityRecommendations(hooks, structure, cta, professional) {
+    const recommendations = [];
+    
+    if (hooks.score < 60) {
+      recommendations.push({
+        priority: 'High',
+        category: 'Video Hooks',
+        action: 'Create stronger opening hooks with questions or surprising facts'
+      });
+    }
+    
+    if (structure.score < 60) {
+      recommendations.push({
+        priority: 'Medium',
+        category: 'Content Structure',
+        action: 'Add timestamps and clear sections to improve structure'
+      });
+    }
+    
+    if (cta.score < 50) {
+      recommendations.push({
+        priority: 'Medium',
+        category: 'Calls to Action',
+        action: 'Include clear subscribe and engagement prompts'
+      });
+    }
+    
+    return recommendations;
+  }
+
+  generatePlaylistRecommendations(organization, binge, thematic) {
+    const recommendations = [];
+    
+    if (!organization.hasPlaylists) {
+      recommendations.push({
+        priority: 'High',
+        category: 'Playlist Creation',
+        action: 'Create 5+ playlists to organize content by topic'
+      });
+    }
+    
+    if (binge.potential === 'Low') {
+      recommendations.push({
+        priority: 'Medium',
+        category: 'Playlist Length',
+        action: 'Create longer playlists (10+ videos) for binge-watching'
+      });
+    }
+    
+    if (thematic.score < 60) {
+      recommendations.push({
+        priority: 'Medium',
+        category: 'Thematic Organization',
+        action: 'Group videos by clear themes and topics'
+      });
+    }
+    
+    return recommendations;
+  }
+
+  generatePriorityRecommendations(analysisResults) {
+    const allRecommendations = [
+      ...analysisResults.branding.recommendations,
+      ...analysisResults.content.recommendations,
+      ...analysisResults.seo.recommendations,
+      ...analysisResults.engagement.recommendations,
+      ...analysisResults.quality.recommendations,
+      ...analysisResults.playlists.recommendations
+    ];
+    
+    // Sort by priority and return top recommendations
+    const priorityOrder = { 'High': 3, 'Medium': 2, 'Low': 1 };
+    
+    return allRecommendations
+      .sort((a, b) => priorityOrder[b.priority] - priorityOrder[a.priority])
+      .slice(0, 10);
   }
 
   async writeToSheets(analysis) {
