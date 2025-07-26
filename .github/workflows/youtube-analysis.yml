@@ -2,16 +2,28 @@
 name: YouTube Channel Analysis
 
 on:
-  # Trigger on push to main branch
+  # Trigger from Google Apps Script
+  workflow_dispatch:
+    inputs:
+      youtube_url:
+        description: 'YouTube Channel URL'
+        required: false
+        default: ''
+      triggered_by:
+        description: 'Trigger source'
+        required: false
+        default: 'manual'
+      timestamp:
+        description: 'Trigger timestamp'
+        required: false
+        default: ''
+  
+  # Trigger on push to main branch (optional)
   push:
     branches: [ main ]
-  
-  # Allow manual trigger
-  workflow_dispatch:
-  
-  # Schedule to run automatically (optional - runs every 6 hours)
-  schedule:
-    - cron: '0 */6 * * *'  # Every 6 hours
+    paths: 
+      - 'src/**'
+      - '.github/workflows/**'
 
 jobs:
   analyze:
@@ -25,11 +37,19 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '18'
-        cache: 'npm'
         
     - name: Install dependencies
       run: npm install
       
+    - name: Check environment variables
+      run: |
+        echo "Checking environment setup..."
+        echo "Node version: $(node --version)"
+        echo "NPM version: $(npm --version)"
+        echo "GOOGLE_INPUT_DOC_ID is set: ${{ secrets.GOOGLE_INPUT_DOC_ID != '' }}"
+        echo "GOOGLE_OUTPUT_DOC_ID is set: ${{ secrets.GOOGLE_OUTPUT_DOC_ID != '' }}"
+        echo "YOUTUBE_API_KEY is set: ${{ secrets.YOUTUBE_API_KEY != '' }}"
+        
     - name: Run YouTube Channel Analysis
       env:
         YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
@@ -37,7 +57,11 @@ jobs:
         GOOGLE_SHEETS_PRIVATE_KEY: ${{ secrets.GOOGLE_SHEETS_PRIVATE_KEY }}
         GOOGLE_INPUT_DOC_ID: ${{ secrets.GOOGLE_INPUT_DOC_ID }}
         GOOGLE_OUTPUT_DOC_ID: ${{ secrets.GOOGLE_OUTPUT_DOC_ID }}
-      run: node src/analyze.js
+      run: |
+        echo "Starting YouTube Channel Analysis..."
+        mkdir -p results
+        node src/analyze.js
+        echo "Analysis completed."
       
     - name: Archive analysis results
       uses: actions/upload-artifact@v4
@@ -46,3 +70,4 @@ jobs:
         name: analysis-results
         path: results/
         retention-days: 30
+        if-no-files-found: ignore
