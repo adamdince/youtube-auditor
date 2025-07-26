@@ -1,1 +1,48 @@
+# .github/workflows/youtube-analysis.yml
+name: YouTube Channel Analysis
 
+on:
+  # Trigger on push to main branch
+  push:
+    branches: [ main ]
+  
+  # Allow manual trigger
+  workflow_dispatch:
+  
+  # Schedule to run automatically (optional - runs every 6 hours)
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm install
+      
+    - name: Run YouTube Channel Analysis
+      env:
+        YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+        GOOGLE_SHEETS_CLIENT_EMAIL: ${{ secrets.GOOGLE_SHEETS_CLIENT_EMAIL }}
+        GOOGLE_SHEETS_PRIVATE_KEY: ${{ secrets.GOOGLE_SHEETS_PRIVATE_KEY }}
+        GOOGLE_INPUT_DOC_ID: ${{ secrets.GOOGLE_INPUT_DOC_ID }}
+        GOOGLE_OUTPUT_DOC_ID: ${{ secrets.GOOGLE_OUTPUT_DOC_ID }}
+      run: node src/analyze.js
+      
+    - name: Archive analysis results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: analysis-results
+        path: results/
+        retention-days: 30
