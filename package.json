@@ -1,0 +1,16 @@
+{
+  "name": "youtube-analyzer",
+  "version": "3.0.0",
+  "description": "Automated YouTube Channel Analysis with Google Docs Reports",
+  "main": "src/analyze.js",
+  "scripts": {
+    "start": "node src/analyze.js",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "dependencies": {
+    "googleapis": "^126.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
