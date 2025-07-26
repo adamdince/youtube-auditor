@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+
+# Environment variables (local development only)
+.env
+
+# Results and logs
+results/
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
