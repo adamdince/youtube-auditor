@@ -57,10 +57,17 @@ jobs:
         GOOGLE_SHEETS_PRIVATE_KEY: ${{ secrets.GOOGLE_SHEETS_PRIVATE_KEY }}
         GOOGLE_INPUT_DOC_ID: ${{ secrets.GOOGLE_INPUT_DOC_ID }}
         GOOGLE_OUTPUT_DOC_ID: ${{ secrets.GOOGLE_OUTPUT_DOC_ID }}
+        WORKFLOW_YOUTUBE_URL: ${{ github.event.inputs.youtube_url }}
       run: |
         echo "Starting YouTube Channel Analysis..."
         mkdir -p results
-        node src/analyze.js
+        if [ -n "$WORKFLOW_YOUTUBE_URL" ]; then
+          echo "Using URL from workflow input: $WORKFLOW_YOUTUBE_URL"
+          node src/analyze.js "$WORKFLOW_YOUTUBE_URL"
+        else
+          echo "Reading URL from Google Doc..."
+          node src/analyze.js
+        fi
         echo "Analysis completed."
       
     - name: Archive analysis results
